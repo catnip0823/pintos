@@ -361,6 +361,15 @@ cond_wait (struct condition *cond, struct lock *lock)
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to signal a condition variable within an
    interrupt handler. */
+
+bool comp_cond_prio (struct list_elem *elem1,struct list_elem *elem2,void *aux UNUSED){
+  struct semaphore_elem *sema1 = list_entry(elem1,struct semaphore_elem,elem);
+  struct semaphore_elem *sema2 = list_entry(elem2,struct semaphore_elem,elem);
+  return list_entry(list_front(&sema1->semaphore.waiters),struct thread,elem)->priority < 
+          list_entry(list_front(&sema2->semaphore.waiters),struct thread,elem)->priority;
+}
+
+
 void
 cond_signal (struct condition *cond, struct lock *lock UNUSED) 
 {
@@ -369,22 +378,10 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
 
-  struct list_elem * i;
-  struct list_elem * r;
-
-  if (!list_empty (&cond->waiters)) {
-    int max_priority = -1;
-    for (i = list_begin(&cond->waiters); i != list_end(&cond->waiters);
-      i = list_next(i)){
-      struct semaphore_elem * se = list_entry(i, struct semaphore_elem, elem);
-      struct thread * t = list_entry(list_front(&se->semaphore.waiters),struct thread,elem);
-      if (t->priority > max_priority){
-        max_priority = t->priority;
-        r = i;
-      }
-    }
-    list_remove(r);
-    sema_up (&list_entry (i, struct semaphore_elem, elem)->semaphore);
+  if (!list_empty(&cond->waiters)){ 
+    struct list_elem * elem_max_priority = list_max(&cond->waiters,&comp_cond_prio, NULL);    
+    sema_up(&list_entry(elem_max_priority, struct semaphore_elem, elem)-> semaphore);
+    list_remove(elem_max_priority);
   }
 }
 
