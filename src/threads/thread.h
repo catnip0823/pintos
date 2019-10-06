@@ -96,6 +96,12 @@ struct thread
 
     int64_t wait_value;                 /**/
 
+    /* Add for priority scheduling */
+    struct lock * lock_wait_for;        /* The lock thread is waiting for. */
+    struct list locks;                  /* Locks that threads hold. */
+    int lock_priority;                  /* Max priority among locks list. */
+    int original_priority;              /* Original priority regardless of locks. */
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -144,5 +150,9 @@ int thread_get_load_avg (void);
 void wait_iterupt_function(void);
 void list_push_back_function(struct thread *curr);
 bool my_find_max_function(struct list_elem* elem1, struct list_elem* elem2, void* void_item);
+
+void lock_priority_donation(struct thread *, struct lock *);
+void thread_add_lock(struct thread *, struct lock *);
+void thread_remove_lock(struct thread *, struct lock *);
 
 #endif /* threads/thread.h */

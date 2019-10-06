@@ -206,6 +206,12 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+  /* Check whether need to yield now*/
+  if (thread_current()->priority < priority){
+    thread_yield();
+  }
+
+
   return tid;
 }
 
@@ -340,7 +346,17 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  enum intr_level old_level;
+  old_level = intr_disable();
+  struct thread * t = thread_current();
+  t->original_priority = new_priority;
+  if (t->original_priority > t->lock_priority)
+    t->priority = t->original_priority;
+  else
+    t->priority = t->lock_priority;
+
+  thread_yield();
+  intr_set_level(old_level);
 }
 
 /* Returns the current thread's priority. */
@@ -469,6 +485,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   t->wait_value = 0;
+  t->lock_wait_for = NULL;
+  t->lock_priority = -1;        /* Indicate invalid priority. */
+  t->original_priority = priority;
+  list_init(&t->locks);
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -622,3 +642,56 @@ bool my_find_max_function(struct list_elem* elem1, struct list_elem* elem2, void
         return true;
     return false;
 };
+
+void lock_priority_donation(struct thread *t, struct lock *lock){
+    t->lock_wait_for = lock;
+    if (t->priority < lock->priority)
+        return;
+    while (1){
+        if (t->priority > lock->priority){
+            lock->priority = t->priority;
+        } else {
+            break;
+        }
+        t = lock->holder;
+        if (t->priority < lock->priority){
+            t->priority = lock->priority;
+        }
+        if (t->lock_priority < lock->priority){
+            t->lock_priority = lock->priority;
+        }
+        if (t->lock_wait_for == NULL){
+            break;
+        } else {
+            lock = t->lock_wait_for;
+        }
+    }
+
+}
+
+void thread_add_lock(struct thread *t, struct lock *lock){
+    lock->holder = t;
+    list_push_back(&t->locks, &lock->lock_elem);
+    if (lock->priority > t->priority)
+        t->priority = lock->priority;
+    if (lock->priority > t->lock_priority)
+        t->lock_priority = lock->priority;
+}
+
+void thread_remove_lock(struct thread *t, struct lock *lock){
+    lock->holder = NULL;
+    list_remove(&lock->lock_elem);
+    int max_priority = -1;
+    struct list_elem *i;
+    for (i = list_begin(&t->locks); i != list_end(&t->locks);
+        i = list_next(i)){
+        struct lock* l = list_entry(i, struct lock, lock_elem);
+        if (l->priority > max_priority)
+            max_priority = l->priority;
+    }
+    t->lock_priority = max_priority;
+    if (t->lock_priority > t->original_priority)
+        t->priority = t->lock_priority;
+    else
+        t->priority = t->original_priority;
+}
