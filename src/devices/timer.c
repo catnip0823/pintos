@@ -91,7 +91,7 @@ timer_sleep (int64_t ticks)
 {
     ASSERT (intr_get_level () == INTR_ON);
     if (ticks<=0)
-        return;
+      return;
     enum intr_level old_level = intr_disable ();
     struct thread* curr =  thread_current();
     ASSERT (!intr_context ());
@@ -180,6 +180,13 @@ timer_interrupt (struct intr_frame *args UNUSED)
   ticks++;
   thread_tick ();
   wait_iterupt_function();
+
+  /* if mlfqs, refresh cpu, priority for all threads. */
+  if(thread_mlfqs != NULL){
+    refresh_cpu(ticks, TIMER_FREQ);
+    if (ticks % 4 == 0)
+      refresh_priority();
+  }
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

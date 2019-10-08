@@ -97,10 +97,13 @@ struct thread
     int64_t wait_value;                 /**/
 
     /* Add for priority scheduling */
-    struct lock * lock_wait_for;        /* The lock thread is waiting for. */
     struct list locks;                  /* Locks that threads hold. */
+    struct lock * lock_wait_for;        /* The lock thread is waiting for. */
     int lock_priority;                  /* Max priority among locks list. */
     int original_priority;              /* Original priority regardless of locks. */
+
+  	int nice;                           /* nice value for priority. */
+  	int recent_cpu;						          /* recent_cpu value for priority. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -154,5 +157,10 @@ bool my_find_max_function(struct list_elem* elem1, struct list_elem* elem2, void
 void lock_priority_donation(struct thread *, struct lock *);
 void thread_add_lock(struct thread *, struct lock *);
 void thread_remove_lock(struct thread *, struct lock *);
+
+
+void refresh_cpu(long long ticks, int timer);             /* function in part3, refresh recent_cpu for all threads. */
+void refresh_priority();                                  /* function in part3, refresh priority for all threads. */
+int convert_to_int(int x);                                /* Convert x to integer (rounding to nearest). */
 
 #endif /* threads/thread.h */

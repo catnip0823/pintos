@@ -108,16 +108,13 @@ sema_try_down (struct semaphore *sema)
 void
 sema_up (struct semaphore *sema) 
 {
-  enum intr_level old_level;
-
+  enum intr_level old_level = intr_disable ();
   ASSERT (sema != NULL);
-
-  old_level = intr_disable ();
   int max_priority;
   struct thread * t;
   struct list_elem * e;
-  if (!list_empty (&sema->waiters)) {
-    e = list_max(&sema->waiters, &my_find_max_function, NULL);
+  if (list_empty (&sema->waiters) == false) {
+    e = list_max(&sema->waiters, (list_less_func*)&my_find_max_function, NULL);
     t = list_entry(e, struct thread, elem);
     list_remove(e);
     thread_unblock(t);
@@ -204,10 +201,9 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  enum intr_level old_level;
-  old_level = intr_disable();
+  enum intr_level old_level = intr_disable();
 
-  while (lock->holder != NULL){    /* Priority donate process. */
+  while (lock->holder){    /* Priority donate process. */
     list_push_back(&lock->semaphore.waiters, &thread_current()->elem);
     lock_priority_donation(thread_current(), lock);
     thread_block();  // ???Not sure
@@ -232,8 +228,7 @@ lock_try_acquire (struct lock *lock)
 
   ASSERT (lock != NULL);
   ASSERT (!lock_held_by_current_thread (lock));
-  enum intr_level old_level;
-  old_level = intr_disable();
+  enum intr_level old_level = intr_disable();
 
   //success = sema_try_down (&lock->semaphore);
   if (lock->holder == NULL){
