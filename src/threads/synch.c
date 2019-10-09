@@ -205,7 +205,8 @@ lock_acquire (struct lock *lock)
 
   while (lock->holder){    /* Priority donate process. */
     list_push_back(&lock->semaphore.waiters, &thread_current()->elem);
-    lock_priority_donation(thread_current(), lock);
+    if (thread_mlfqs == false)
+      lock_priority_donation(thread_current(), lock);
     thread_block();  // ???Not sure
   }
 

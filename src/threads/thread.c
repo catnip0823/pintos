@@ -674,6 +674,8 @@ void lock_priority_donation(struct thread *t, struct lock *lock){
 void thread_add_lock(struct thread *t, struct lock *lock){
     lock->holder = t;
     list_push_back(&t->locks, &lock->lock_elem);
+    if (thread_mlfqs == true)
+        return;
     if (lock->priority > t->priority)
         t->priority = lock->priority;
     if (lock->priority > t->lock_priority)
@@ -685,6 +687,8 @@ void thread_remove_lock(struct thread *t, struct lock *lock){
     list_remove(&lock->lock_elem);
     int max_priority = -1;
     struct list_elem *i;
+    if (thread_mlfqs == true)
+        return;
     for (i = list_begin(&t->locks); i != list_end(&t->locks);
         i = list_next(i)){
         struct lock* l = list_entry(i, struct lock, lock_elem);
