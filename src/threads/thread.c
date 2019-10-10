@@ -627,7 +627,8 @@ void wait_iterupt_function(void)
 {
     enum intr_level old_level = intr_disable();
     struct list_elem *item;
-    for (item = list_begin (&waiting_list); item != list_end (&waiting_list); item = list_next (item)) {
+    for (item = list_begin (&waiting_list); item != list_end (&waiting_list); 
+          item = list_next (item)) {
         struct thread *item_thread = list_entry(item, struct thread, wait_elem);
         item_thread->wait_value--;
         if (item_thread->wait_value == 0) {
@@ -644,19 +645,24 @@ void list_push_back_function(struct thread *curr){
     schedule ();
 }
 
-
-bool my_find_max_function(struct list_elem* elem1, struct list_elem* elem2, void *aux UNUSED){
-    if (list_entry(elem1, struct thread, elem)->priority < list_entry(elem2, struct thread, elem)->priority)
+/* Compare two priority of threads, in terms of list_elemrnt of thread, */
+bool my_find_max_function(struct list_elem* elem1,
+                          struct list_elem* elem2, void *aux UNUSED){
+    if (list_entry(elem1, struct thread, elem)->priority 
+          < list_entry(elem2, struct thread, elem)->priority)
         return true;
     return false;
 };
 
+/* Function for priority donation process, which is mainly a loop,
+break when thread isn't blocked or priority is higher than previous 
+thread. */
 void lock_priority_donation(struct thread *t, struct lock *lock){
     t->lock_wait_for = lock;
     if (t->priority < lock->priority)
         return;
     while (true){
-        if (t->priority < lock->priority)
+        if (t->priority < lock->priority)  /* When donation not necessary */
         	break;
         lock->priority = max(t->priority, lock->priority);
         t = lock->holder;
@@ -671,6 +677,9 @@ void lock_priority_donation(struct thread *t, struct lock *lock){
 
 }
 
+/* Add a lock when a thread successfully aquired it.
+   By pushing it into the list, and update the priority
+   and lock_priority if necessary. */
 void thread_add_lock(struct thread *t, struct lock *lock){
     lock->holder = t;
     list_push_back(&t->locks, &lock->lock_elem);
@@ -682,10 +691,13 @@ void thread_add_lock(struct thread *t, struct lock *lock){
         t->lock_priority = lock->priority;
 }
 
+/* When a lock is released, remove it from the thread's list,
+   Find the new max-priority locks the threads hold,
+   and update it. */
 void thread_remove_lock(struct thread *t, struct lock *lock){
     lock->holder = NULL;
     list_remove(&lock->lock_elem);
-    int max_priority = -1;
+    int max_priority = -1;  /* default invalid priority. */
     struct list_elem *i;
     if (thread_mlfqs == true)
         return;
