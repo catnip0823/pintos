@@ -631,7 +631,7 @@ void wait_iterupt_function(void)
         item_thread->wait_value--;
         if (item_thread->wait_value == 0) {
             thread_unblock(item_thread);
-            struct list_elem *return_value = list_remove(item);
+            list_remove(item);
             item = list_prev(item);
         }
     }
@@ -736,7 +736,7 @@ void refresh_cpu(long long ticks, int timer){
 }
 
 /* implement renew priority funciton for proj1 part3*/
-void refresh_priority(){
+void refresh_priority(void){
   struct list_elem *e;
   for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e)){
     struct thread *t = list_entry (e, struct thread, allelem);

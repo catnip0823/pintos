@@ -31,6 +31,7 @@
 #include <string.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+bool comp_cond_prio (struct list_elem *elem1,struct list_elem *elem2,void *aux UNUSED);
 
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
@@ -110,7 +111,6 @@ sema_up (struct semaphore *sema)
 {
   enum intr_level old_level = intr_disable ();
   ASSERT (sema != NULL);
-  int max_priority;
   struct thread * t;
   struct list_elem * e;
   if (list_empty (&sema->waiters) == false) {
@@ -278,10 +278,11 @@ lock_held_by_current_thread (const struct lock *lock)
 void lock_update(struct lock *lock){
   if (!list_empty(&lock->semaphore.waiters)){
     int max_priority = -1;  /* Default invalid value  */
-    struct list_elem *i = list_max(&lock->semaphore.waiters, my_find_max_function, NULL);
+    struct list_elem *i = list_max(&lock->semaphore.waiters, (list_less_func*)&my_find_max_function, NULL);
     list_remove(i);
     struct list_elem * elem;
     struct thread * t_max;
+    bool check_in_loop = 0;
     /* Update the priority */
     for (elem = list_begin(&lock->semaphore.waiters); elem != list_end(&lock->semaphore.waiters);
       elem = list_next(elem)){
@@ -289,9 +290,11 @@ void lock_update(struct lock *lock){
       if (t->priority > max_priority){
         max_priority = t->priority;
         t_max = t;
+        check_in_loop = 1;
       }
     }
-    thread_unblock(t_max);
+    if (check_in_loop)
+      thread_unblock(t_max);
   }
 }
 
@@ -379,7 +382,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
 
   if (!list_empty(&cond->waiters)){ 
     /* Called the function we defined above */
-    struct list_elem * elem_max_priority = list_max(&cond->waiters,&comp_cond_prio, NULL);    
+    struct list_elem * elem_max_priority = list_max(&cond->waiters,(list_less_func*)&comp_cond_prio, NULL);    
     sema_up(&list_entry(elem_max_priority, struct semaphore_elem, elem)-> semaphore);
     list_remove(elem_max_priority);
   }

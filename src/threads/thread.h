@@ -160,7 +160,7 @@ void thread_remove_lock(struct thread *, struct lock *);
 
 
 void refresh_cpu(long long ticks, int timer);
-void refresh_priority();
+void refresh_priority(void);
 int convert_to_int(int x);
 
 #endif /* threads/thread.h */

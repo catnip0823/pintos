@@ -182,7 +182,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
   wait_iterupt_function();
 
   /* if mlfqs, refresh cpu, priority for all threads. */
-  if(thread_mlfqs != NULL){
+  if(thread_mlfqs){
     refresh_cpu(ticks, TIMER_FREQ);
     if (ticks % 4 == 0)
       refresh_priority();
