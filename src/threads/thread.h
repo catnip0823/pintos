@@ -91,10 +91,10 @@ struct thread
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
-    struct list_elem elem;              /* List element. */
-    struct list_elem wait_elem;         /* List element. */
+    struct list_elem elem;              /* List element for all threads in ready list.. */
+    struct list_elem wait_elem;         /* List element for all threads in waiting list.. */
 
-    int64_t wait_value;                 /**/
+    int64_t wait_value;                 /* Time need to wait before unblock. */
 
     /* Add for priority scheduling */
     struct list locks;                  /* Locks that threads hold. */
@@ -159,8 +159,8 @@ void thread_add_lock(struct thread *, struct lock *);
 void thread_remove_lock(struct thread *, struct lock *);
 
 
-void refresh_cpu(long long ticks, int timer);             /* function in part3, refresh recent_cpu for all threads. */
-void refresh_priority();                                  /* function in part3, refresh priority for all threads. */
-int convert_to_int(int x);                                /* Convert x to integer (rounding to nearest). */
+void refresh_cpu(long long ticks, int timer);
+void refresh_priority();
+int convert_to_int(int x);
 
 #endif /* threads/thread.h */

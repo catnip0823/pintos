@@ -99,7 +99,7 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
-  list_init (&waiting_list);
+  list_init (&waiting_list);      /* Also init waiting_list. */
   list_init (&all_list);
 
   /* Set up a thread structure for the running thread. */
@@ -192,8 +192,8 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   struct thread *cur_t = thread_current();
   tid = t->tid = allocate_tid ();
-  t->nice = cur_t->nice;
-  t->recent_cpu = cur_t->recent_cpu;    /*p3*/
+  t->nice = cur_t->nice;                /* set nice value. */
+  t->recent_cpu = cur_t->recent_cpu;    /* set recent_cpu value. */
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -374,15 +374,12 @@ void
 thread_set_nice (int nice UNUSED) 
 {
   thread_current()->nice = nice;
-  //refresh_priority();
-  //thread_yield();
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
   return thread_current()->nice;
 
 }
@@ -391,7 +388,6 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
   return 100*convert_to_int(load_avg);
 }
 
@@ -399,7 +395,6 @@ thread_get_load_avg (void)
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
   return 100*convert_to_int(thread_current()->recent_cpu);
 }
 
@@ -490,9 +485,9 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
-  t->wait_value = 0;
-  t->nice = 0;      /*p3*/
-  t->recent_cpu = 0;
+  t->wait_value = 0;            /*set wait value(default = 0)*/
+  t->nice = 0;                  /*set nice value(default = 0)*/
+  t->recent_cpu = 0;            /*set recent_cpu value(default = 0)*/
   t->lock_wait_for = NULL;
   t->lock_priority = -1;        /* Indicate invalid priority. */
   t->original_priority = priority;
@@ -623,6 +618,9 @@ allocate_tid (void)
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
+/* check each thread in the waiting list, if it is time for one thread 
+to wake up, then unblock the thread, remove it from the waiting list 
+and add it to the ready list. We call this function every ticks++. */
 void wait_iterupt_function(void)
 {
     enum intr_level old_level = intr_disable();
@@ -640,12 +638,13 @@ void wait_iterupt_function(void)
     intr_set_level(old_level);
 }
 
+/* push the blocked thread into waiting list. */
 void list_push_back_function(struct thread *curr){
     list_push_back(&waiting_list, &curr->wait_elem);
     schedule ();
 }
 
-/* Compare two priority of threads, in terms of list_elemrnt of thread, */
+/* Compare two priority of threads, in terms of list_elemrnt of thread. */
 bool my_find_max_function(struct list_elem* elem1,
                           struct list_elem* elem2, void *aux UNUSED){
     if (list_entry(elem1, struct thread, elem)->priority 
@@ -715,7 +714,7 @@ void thread_remove_lock(struct thread *t, struct lock *lock){
 }
 
 
-/* implement renew cpu funciton for part3*/
+/* implement renew cpu funciton for proj1 part3*/
 void refresh_cpu(long long ticks, int timer){
   if(thread_current() != idle_thread)
     thread_current()->recent_cpu = thread_current()->recent_cpu + (1<<14);
@@ -736,7 +735,7 @@ void refresh_cpu(long long ticks, int timer){
   }
 }
 
-/* implement renew priority funciton for part3*/
+/* implement renew priority funciton for proj1 part3*/
 void refresh_priority(){
   struct list_elem *e;
   for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e)){
