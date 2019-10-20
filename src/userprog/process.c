@@ -38,8 +38,12 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  char *thread_name;
+  thread_name = strtok_r(file_name, " ", &file_name);
+
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (thread_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -54,17 +58,65 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
+  // proj3
+  char* argv[512];
+  char* temp_ptr;
+  char* sub_str = strtok_r(file_name, " ", &temp_ptr);
+  char* thread_name = sub_str;
+  int num_argv = 0;
+  while (temp_ptr != NULL){
+    sub_str = strtok_r(temp_ptr, " ", &temp_ptr);
+    argv[num_argv] = sub_str;
+    num_argv ++;
+  }
+  //end proj3
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  success = load (thread_name, &if_.eip, &if_.esp); //proj3
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
+
+  // proj3    argv
+  char* temp_stack_pointer[512];
+  for (int i = num_argv - 1; i >= 0; i--){
+    if_.esp -= strlen(argv[i]) + 1;
+    memcpy(if_.esp, argv[i], strlen(argv[i]) + 1);
+    temp_stack_pointer[i] = if_.esp;
+
+  }
+
+  while ((int)if_.esp % 4){
+    if_.esp--;
+  }
+
+  if_.esp -= 4;
+  memset(if_.esp, 0, 4);
+  for (int i = num_argv - 1; i >= 0; i--){
+    if_.esp -= 4;
+    memcpy(if_.esp, temp_stack_pointer[i], 4);
+  }
+
+  if_.esp -= 4;
+  memcpy(if_.esp, if_.esp + 4, 4);
+
+  if_.esp -= 4;
+  memset(if_.esp, num_argv, 4);
+
+  if_.esp -= 4;
+  memset(if_.esp, 0, 4);
+  //end proj3
+
+
+
+
+
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -88,6 +140,9 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+	while (true)
+		thread_yield();
+	//proj3
   return -1;
 }
 
@@ -103,6 +158,7 @@ process_exit (void)
   pd = cur->pagedir;
   if (pd != NULL) 
     {
+      printf("%s: exit(%d)\n", cur->name, cur->process_terminate_message);
       /* Correct ordering here is crucial.  We must set
          cur->pagedir to NULL before switching page directories,
          so that a timer interrupt can't switch back to the

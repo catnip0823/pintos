@@ -108,6 +108,7 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    int process_terminate_message;
 #endif
 
     /* Owned by thread.c. */

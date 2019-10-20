@@ -107,6 +107,9 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+  #ifdef USERPROG
+  initial_thread->process_terminate_message = 0;
+  #endif
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
