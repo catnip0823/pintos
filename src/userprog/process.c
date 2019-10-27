@@ -19,7 +19,7 @@
 #include "threads/vaddr.h"
 
 static thread_func start_process NO_RETURN;
-static bool load (const char *cmdline, void (**eip) (void), void **esp);
+static bool load (const char *cmdline, void (**eip) (void), void **esp, const char *whole_name);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -39,11 +39,13 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
 
   char *thread_name;
-  thread_name = strtok_r(file_name, " ", &file_name);
+  char *arg_name = file_name;
+  thread_name = strtok_r(arg_name, " ", &arg_name);
 
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (thread_name, PRI_DEFAULT, start_process, fn_copy);
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -59,63 +61,29 @@ start_process (void *file_name_)
   bool success;
 
   // proj3
-  char* argv[512];
+  char *cp_file;
+  cp_file = palloc_get_page(0);
+  if (cp_file == NULL)
+    return TID_ERROR;
+  strlcpy(cp_file, file_name_, PGSIZE);
   char* temp_ptr;
-  char* sub_str = strtok_r(file_name, " ", &temp_ptr);
-  char* thread_name = sub_str;
-  int num_argv = 0;
-  while (temp_ptr != NULL){
-    sub_str = strtok_r(temp_ptr, " ", &temp_ptr);
-    argv[num_argv] = sub_str;
-    num_argv ++;
-  }
+  char* thread_name = strtok_r(cp_file, " ", &temp_ptr); 
   //end proj3
+
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (thread_name, &if_.eip, &if_.esp); //proj3
+  success = load (thread_name, &if_.eip, &if_.esp, file_name_); //proj3
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success) 
+  palloc_free_page (file_name_);
+
+  if (!success) {
     thread_exit ();
-
-  // proj3    argv
-  char* temp_stack_pointer[512];
-  for (int i = num_argv - 1; i >= 0; i--){
-    if_.esp -= strlen(argv[i]) + 1;
-    memcpy(if_.esp, argv[i], strlen(argv[i]) + 1);
-    temp_stack_pointer[i] = if_.esp;
-
   }
-
-  while ((int)if_.esp % 4){
-    if_.esp--;
-  }
-
-  if_.esp -= 4;
-  memset(if_.esp, 0, 4);
-  for (int i = num_argv - 1; i >= 0; i--){
-    if_.esp -= 4;
-    memcpy(if_.esp, temp_stack_pointer[i], 4);
-  }
-
-  if_.esp -= 4;
-  memcpy(if_.esp, if_.esp + 4, 4);
-
-  if_.esp -= 4;
-  memset(if_.esp, num_argv, 4);
-
-  if_.esp -= 4;
-  memset(if_.esp, 0, 4);
-  //end proj3
-
-
-
-
 
 
   /* Start the user process by simulating a return from an
@@ -251,7 +219,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, const char *whole_name);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -262,7 +230,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
 bool
-load (const char *file_name, void (**eip) (void), void **esp) 
+load (const char *file_name, void (**eip) (void), void **esp, const char *whole_name) 
 {
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
@@ -358,7 +326,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, whole_name))
     goto done;
 
   /* Start address. */
@@ -483,7 +451,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp, const char *whole_name) 
 {
   uint8_t *kpage;
   bool success = false;
@@ -492,8 +460,56 @@ setup_stack (void **esp)
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
+      if (success){
+        /* Stack initialization code insipired by the work of pindexis
+        (the full GitHub link of which is available in Design2.txt).
+        Mainly used to determine correct pointer types. */
+
+        /* Offset PHYS_BASE as instructed. */
         *esp = PHYS_BASE;
+
+        char* argv[512];
+        char* temp_ptr;
+        char* sub_str = strtok_r(whole_name, " ", &temp_ptr);
+        char* thread_name = sub_str;
+        argv[0] = sub_str;
+        int num_argv = 1;
+        while (sub_str!=NULL){
+          sub_str = strtok_r(temp_ptr, " ", &temp_ptr);
+          argv[num_argv] = sub_str;
+          num_argv++;
+        }
+        num_argv--;
+
+        int *temp_stack_pointer = calloc(num_argv, sizeof(int));
+        for (int i = num_argv - 1; i >= 0; i--){
+          *esp = *esp - (strlen(argv[i]) + 1);
+          memcpy(*esp, argv[i], strlen(argv[i]) + 1);
+          temp_stack_pointer[i] = *esp;
+        }
+
+        while ((int)*esp % 4){
+          *esp -= 1;
+        }
+
+        *esp -= 4;
+        *(int *)(*esp) = 0;
+
+        for (int i = num_argv - 1; i >= 0; i--){
+          *esp -= 4;
+          *(int *)(*esp) = temp_stack_pointer[i];
+        }
+
+        *esp -= 4;
+        *(int *)(*esp) = *esp + 4;
+
+        *esp = *esp - 4;
+        *(int *)(*esp) = num_argv;
+
+        *esp = *esp - 4;
+        *(int *)(*esp) = 0;
+
+    }
       else
         palloc_free_page (kpage);
     }

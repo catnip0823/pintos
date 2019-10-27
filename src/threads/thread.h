@@ -91,19 +91,10 @@ struct thread
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
-    struct list_elem elem;              /* List element for all threads in ready list.. */
-    struct list_elem wait_elem;         /* List element for all threads in waiting list.. */
+    struct list_elem elem;              /* List element. */
+    struct list_elem wait_elem;         /* List element. */
 
-    int64_t wait_value;                 /* Time need to wait before unblock. */
-
-    /* Add for priority scheduling */
-    struct list locks;                  /* Locks that threads hold. */
-    struct lock * lock_wait_for;        /* The lock thread is waiting for. */
-    int lock_priority;                  /* Max priority among locks list. */
-    int original_priority;              /* Original priority regardless of locks. */
-
-  	int nice;                           /* nice value for priority. */
-  	int recent_cpu;						          /* recent_cpu value for priority. */
+    int64_t wait_value;                 /**/
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -154,14 +145,5 @@ int thread_get_load_avg (void);
 void wait_iterupt_function(void);
 void list_push_back_function(struct thread *curr);
 bool my_find_max_function(struct list_elem* elem1, struct list_elem* elem2, void* void_item);
-
-void lock_priority_donation(struct thread *, struct lock *);
-void thread_add_lock(struct thread *, struct lock *);
-void thread_remove_lock(struct thread *, struct lock *);
-
-
-void refresh_cpu(long long ticks, int timer);
-void refresh_priority(void);
-int convert_to_int(int x);
 
 #endif /* threads/thread.h */

@@ -3,12 +3,15 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
-//proj3
+// //proj3
+
+#include "threads/synch.h"
 #include "threads/vaddr.h"
+
 
 static void syscall_handler (struct intr_frame *);
 //proj3
-void check_valid_pointer(void *pointer, int size_pointer);
+void check_valid_pointer(void *pointer);
 
 void syscall_halt (void);
 void syscall_exit (int status);
@@ -33,16 +36,23 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  // printf ("system call!\n");
-  //p3
-  int *sp = f->esp;
-  check_valid_pointer(sp, sizeof(int));
-  switch((uint32_t)(*sp)){
+    check_valid_pointer((void *)f->esp);
+	// printf ("Hex dump:\n");
+ //    uint32_t dw = (uint32_t) PHYS_BASE - (uint32_t) f->esp;
+ //    hex_dump ((uintptr_t) f->esp, f->esp, dw, true);
+
+	int arg1;
+	int arg2;
+	int arg3;
+	int arg4;
+
+  switch(*(int *) f->esp){
   	case SYS_HALT:
   		break;
   	case SYS_EXIT:
-  		check_valid_pointer(sp+1, sizeof(int));
-  		syscall_exit((uint32_t)(*(sp+1)));
+  		check_valid_pointer((void*)((int*)f->esp + 1));
+  		arg1 = *((int*)f->esp+1);
+  		syscall_exit((int)arg1);
   		break;
   	case SYS_EXEC:
   		break;
@@ -50,7 +60,6 @@ syscall_handler (struct intr_frame *f UNUSED)
   		break;
   	case SYS_CREATE:
   		break;
-  	case SYS_REMOVE:
   		break;
   	case SYS_OPEN:
   		break;
@@ -59,11 +68,18 @@ syscall_handler (struct intr_frame *f UNUSED)
   	case SYS_READ:
   		break;
   	case SYS_WRITE:
-  		check_valid_pointer(sp+1, 3*sizeof(int));
-  		uint32_t parameter1 = (uint32_t)(*(sp+1));
-  		uint32_t parameter2 = (uint32_t)(*(sp+2));
-  		uint32_t parameter3 = (uint32_t)(*(sp+3));
-  		f->eax = syscall_write(parameter1, parameter2, parameter3);
+
+	  	check_valid_pointer((void *)((int*)f->esp+1));
+	  	check_valid_pointer((void *)((int*)f->esp+2));
+	  	check_valid_pointer((void *)((int*)f->esp+3));
+	  	arg1 = *((int*)f->esp+1);
+	  	arg2 = *((int*)f->esp+2);
+	  	arg3 = *((int*)f->esp+3);
+
+  		int fd = (int)arg1;
+  		const void *buffer = pagedir_get_page(thread_current()->pagedir, (void *)arg2);
+  		unsigned size = (unsigned int)arg3;
+  		f->eax = syscall_write(fd, (void*)*((int*)f->esp+2), size);
   		break;
   	case SYS_SEEK:
   		break;
@@ -72,26 +88,27 @@ syscall_handler (struct intr_frame *f UNUSED)
   	case SYS_CLOSE:
   		break;
 
+  	exit(-1);
+  	break;
+
   }
 
 
-  thread_exit ();
 }
 
 
-void check_valid_pointer(void *pointer, int size_pointer){
-	for(int i = 0; i < size_pointer; i++){
-		if (pointer == NULL){
-			syscall_exit(1);
-		}
-		if (is_user_vaddr(pointer) == false)
-			syscall_exit(1);
-		//poj3 have problem
-		pointer++;
-	}
+void check_valid_pointer(void *pointer){
+	if (pointer == NULL)
+		exit(-1);
+	if (is_user_vaddr(pointer) == false)
+		exit(-1);
+	if (is_kernel_vaddr(pointer))
+		exit(-1);
+	if (!pagedir_get_page(thread_current()->pagedir, pointer))
+		exit(-1);
 }
 
-void syscall_halt (void){}
+// void syscall_halt (void){}
 
 
 void syscall_exit(int status){
@@ -109,7 +126,25 @@ void syscall_exit(int status){
 // int syscall_read (int fd, void *buffer, unsigned size){}
 int syscall_write (int fd, const void *buffer, unsigned size){
 
+	if (fd == 1){
+		putbuf(buffer, size);
+		return size;
+	}
+	else
+	{
+		/* do something else with other fd */
+	}
+
 }
 // void syscall_seek (int fd, unsigned position){}
 // unsigned syscall_tell (int fd){}
 // void syscall_close (int fd){}
+
+
+void exit (int status)
+{
+	thread_current()->process_terminate_message = status;
+	printf("%s: exit(%d)\n", thread_current()->name, status);
+  // sema_up(&thread_current()->being_waited_on);
+  thread_exit ();
+}
