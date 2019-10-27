@@ -88,7 +88,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   	case SYS_CLOSE:
   		break;
 
-  	exit(-1);
+  	syscall_exit(-1);
   	break;
 
   }
@@ -99,13 +99,13 @@ syscall_handler (struct intr_frame *f UNUSED)
 
 void check_valid_pointer(void *pointer){
 	if (pointer == NULL)
-		exit(-1);
+		syscall_exit(-1);
 	if (is_user_vaddr(pointer) == false)
-		exit(-1);
+		syscall_exit(-1);
 	if (is_kernel_vaddr(pointer))
-		exit(-1);
+		syscall_exit(-1);
 	if (!pagedir_get_page(thread_current()->pagedir, pointer))
-		exit(-1);
+		syscall_exit(-1);
 }
 
 // void syscall_halt (void){}
@@ -139,12 +139,3 @@ int syscall_write (int fd, const void *buffer, unsigned size){
 // void syscall_seek (int fd, unsigned position){}
 // unsigned syscall_tell (int fd){}
 // void syscall_close (int fd){}
-
-
-void exit (int status)
-{
-	thread_current()->process_terminate_message = status;
-	printf("%s: exit(%d)\n", thread_current()->name, status);
-  // sema_up(&thread_current()->being_waited_on);
-  thread_exit ();
-}

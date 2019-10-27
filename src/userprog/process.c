@@ -28,6 +28,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp, const ch
 tid_t
 process_execute (const char *file_name) 
 {
+
   char *fn_copy;
   tid_t tid;
 
@@ -46,10 +47,18 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (thread_name, PRI_DEFAULT, start_process, fn_copy);
 
-  if (tid == TID_ERROR)
+  if (tid == TID_ERROR){
     palloc_free_page (fn_copy); 
+    return tid;
+  }
+
+  enum intr_level old_level = intr_disable ();
+  struct thread *children_thread = find_thread_with_tid(tid);
+  list_push_front(&thread_current()->process_children_list, &children_thread->process_children_elem);
+  intr_set_level (old_level);
   return tid;
 }
+
 
 /* A thread function that loads a user process and starts it
    running. */
@@ -108,10 +117,23 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-	while (true)
-		thread_yield();
-	//proj3
-  return -1;
+	struct list_elem *item;
+  struct thread *child_thread;
+  int check_in_children_list = 0;
+  for (item = list_begin (&thread_current()->process_children_list); item != list_end (&thread_current()->process_children_list); item = list_next (item)) {
+    struct thread *item_thread = list_entry(item, struct thread, process_children_elem);
+    if (item_thread->tid == child_tid){
+      child_thread = item_thread;
+      check_in_children_list = 1;
+      break;
+    }
+  }
+  if (check_in_children_list == 0)
+    return -1;
+
+  sema_down(&child_thread->wait_child_process);
+  list_remove(&child_thread->process_children_elem);
+  return child_thread->process_terminate_message;
 }
 
 /* Free the current process's resources. */

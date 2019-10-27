@@ -30,7 +30,7 @@ static struct list waiting_list;
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
-static struct list all_list;
+static struct list all_list;// static struct list all_list;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -288,6 +288,7 @@ thread_exit (void)
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
+  sema_up(&thread_current()->wait_child_process);
   process_exit ();
 #endif
 
@@ -470,6 +471,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   t->wait_value = 0;
+  #ifdef USERPROG
+  sema_init (&t->wait_child_process, 0);
+  list_init (&t->process_children_list);
+  #endif
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -623,3 +628,15 @@ bool my_find_max_function(struct list_elem* elem1, struct list_elem* elem2, void
         return true;
     return false;
 };
+
+
+
+struct thread * find_thread_with_tid(int tid){
+  struct list_elem *e;
+  ASSERT (intr_get_level () == INTR_OFF);
+  for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e)){
+    struct thread *t = list_entry (e, struct thread, allelem);
+    if (t->tid == tid)
+      return t;
+  }
+}

@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -100,6 +101,10 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     int process_terminate_message;
+    struct list_elem process_children_elem;
+    struct list process_children_list;
+    struct semaphore wait_child_process;
+    /* proj3 */
 #endif
 
     /* Owned by thread.c. */
@@ -145,5 +150,7 @@ int thread_get_load_avg (void);
 void wait_iterupt_function(void);
 void list_push_back_function(struct thread *curr);
 bool my_find_max_function(struct list_elem* elem1, struct list_elem* elem2, void* void_item);
+
+struct thread * find_thread_with_tid(int tid);
 
 #endif /* threads/thread.h */
