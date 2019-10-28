@@ -130,8 +130,7 @@ int syscall_write (int fd, const void *buffer, unsigned size){
 		putbuf(buffer, size);
 		return size;
 	}
-	else
-	{
+	else{
 		/* do something else with other fd */
 	}
 
