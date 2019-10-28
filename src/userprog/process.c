@@ -42,6 +42,8 @@ process_execute (const char *file_name)
   char *thread_name;
   char *arg_name = file_name;
   thread_name = strtok_r(arg_name, " ", &arg_name);
+  // printf("%s\n", file_name);
+  // ASSERT(1==0);
 
 
   /* Create a new thread to execute FILE_NAME. */

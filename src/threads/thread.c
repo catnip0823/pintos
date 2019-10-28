@@ -300,7 +300,6 @@ thread_exit (void)
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
-  ASSERT(0==1);
 }
 
 /* Yields the CPU.  The current thread is not put to sleep and
@@ -474,6 +473,10 @@ init_thread (struct thread *t, const char *name, int priority)
   #ifdef USERPROG
   sema_init (&t->wait_child_process, 0);
   list_init (&t->process_children_list);
+  for (int i = 0; i < PROCESS_FILE_MAX; i++){
+    t->process_files[i] = NULL;
+  }
+  t->fd = 2;
   #endif
 
   old_level = intr_disable ();

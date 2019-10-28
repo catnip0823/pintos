@@ -24,6 +24,8 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+#define PROCESS_FILE_MAX 128         /* proj2 */
+
 
 /* A kernel thread or user process.
 
@@ -104,6 +106,8 @@ struct thread
     struct list_elem process_children_elem;
     struct list process_children_list;
     struct semaphore wait_child_process;
+    struct file *process_files[PROCESS_FILE_MAX];
+    int fd;
     /* proj3 */
 #endif
 
