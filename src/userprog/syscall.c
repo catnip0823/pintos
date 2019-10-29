@@ -159,9 +159,9 @@ void check_valid_pointer(void *pointer){
 }
 
 void syscall_halt (void){
-  lock_acquire(&syscall_critical_section);
+  // lock_acquire(&syscall_critical_section);
   shutdown_power_off();
-  lock_release(&syscall_critical_section);
+  // lock_release(&syscall_critical_section);
 }
 
 void syscall_exit(int status){
@@ -179,9 +179,9 @@ int syscall_exec (const char *cmd_line){
 }
 
 int syscall_wait (int pid){
-  lock_acquire(&syscall_critical_section);
+  // lock_acquire(&syscall_critical_section);
   int ret_value = process_wait(pid);
-  lock_release(&syscall_critical_section);
+  // lock_release(&syscall_critical_section);
   return ret_value;
 }
 
