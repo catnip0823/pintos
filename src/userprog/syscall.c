@@ -98,7 +98,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   	case SYS_FILESIZE:
       check_valid_pointer((void*)((int*)f->esp + 1));
       arg1 = *((int*)f->esp+1);
-      f->eax = syscall_open((int)arg1);
+      f->eax = syscall_filesize((int)arg1);
   		break;
   	case SYS_READ:
   		check_valid_pointer((void *)((int*)f->esp+1));
@@ -135,7 +135,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   	case SYS_CLOSE:
   		check_valid_pointer((void *)((int*)f->esp+1));
       arg1 = *((int*)f->esp+1);
-      syscall_tell((int)arg1);
+      syscall_close((int)arg1);
       break;
 
   	syscall_exit(-1);
