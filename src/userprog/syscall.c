@@ -165,10 +165,10 @@ void syscall_halt (void){
 }
 
 void syscall_exit(int status){
-  lock_acquire(&syscall_critical_section);
+  // lock_acquire(&syscall_critical_section);
 	thread_current()->process_terminate_message = status;
 	thread_exit();
-  lock_release(&syscall_critical_section);
+  // lock_release(&syscall_critical_section);
 }
 
 int syscall_exec (const char *cmd_line){
