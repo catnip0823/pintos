@@ -65,7 +65,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   	case SYS_EXEC:
       check_valid_pointer((void*)((int*)f->esp + 1));
       arg1 = *((int*)f->esp+1);
-  		// f->eax = syscall_exec((char *)arg1);
+  		f->eax = syscall_exec((char *)arg1);
       break;
   	case SYS_WAIT:
       check_valid_pointer((void*)((int*)f->esp + 1));
@@ -280,7 +280,7 @@ int syscall_write (int fd, const void *buffer, unsigned size){
 
 void syscall_seek (int fd, unsigned position){
   lock_acquire(&syscall_critical_section);
-  if (fd-2 >= PROCESS_FILE_MAX){
+  if (fd-2 >= PROCESS_FILE_MAX || fd < 2){
     lock_release(&syscall_critical_section);
     return;
   }
@@ -295,7 +295,7 @@ void syscall_seek (int fd, unsigned position){
 }
 unsigned syscall_tell (int fd){
   lock_acquire(&syscall_critical_section);
-  if (fd-2 >= PROCESS_FILE_MAX){
+  if (fd-2 >= PROCESS_FILE_MAX || fd < 2){
     lock_release(&syscall_critical_section);
     return;
   }
@@ -310,7 +310,7 @@ unsigned syscall_tell (int fd){
 }
 void syscall_close (int fd){
   lock_acquire(&syscall_critical_section);
-  if (fd-2 >= PROCESS_FILE_MAX){
+  if (fd-2 >= PROCESS_FILE_MAX || fd < 2){
     lock_release(&syscall_critical_section);
     return;
   }
