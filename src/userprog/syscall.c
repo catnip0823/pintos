@@ -69,15 +69,17 @@ syscall_handler (struct intr_frame *f UNUSED)
   	case SYS_EXEC:
       check_pointer((void*)((int*)f->esp + 1), 4);
       arg1 = *((int*)f->esp+1);
+      //if (!check_str(*(char**)(int*)f->esp+1))
+	      //syscall_exit(-1);
       arg1 = check_physical_pointer((void*)arg1);
   		f->eax = syscall_exec((char *)arg1);
       break;
   	case SYS_WAIT:
       check_valid_pointer((void*)((int*)f->esp + 1));
       arg1 = *((int*)f->esp+1);
-      t = *(char**)((int*)f->esp+1);
-      if (!check_str(t))
-        syscall_exit(-1);
+      //char* t = *(char**)((int*)f->esp+1);
+      //if (!check_str(t))
+       // syscall_exit(-1);
       f->eax = syscall_wait((int)arg1);
   		break;
   	case SYS_CREATE:
@@ -161,7 +163,7 @@ int get_value(uint8_t * ptr){
     return -1;
   int retval;
   asm ("movl $1f, %0; movzbl %1, %0; 1:"
-       : "=&a" (retval) : "m" (*uaddr));
+       : "=&a" (retval) : "m" (*ptr));
   return retval;
 }
 
