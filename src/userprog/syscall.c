@@ -14,6 +14,7 @@
 static void syscall_handler (struct intr_frame *);
 //proj3
 void check_valid_pointer(void *pointer);
+const char *check_physical_pointer(void *pointer);
 struct lock syscall_critical_section;
 
 
@@ -52,6 +53,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 	int arg2;
 	int arg3;
   char *file;
+  // printf("%d\n", *(int *) f->esp);
 
   switch(*(int *) f->esp){
   	case SYS_HALT:
@@ -65,6 +67,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   	case SYS_EXEC:
       check_valid_pointer((void*)((int*)f->esp + 1));
       arg1 = *((int*)f->esp+1);
+      arg1 = check_physical_pointer((void*)arg1);
   		f->eax = syscall_exec((char *)arg1);
       break;
   	case SYS_WAIT:
@@ -78,21 +81,21 @@ syscall_handler (struct intr_frame *f UNUSED)
       arg1 = *((int*)f->esp+1);
       arg2 = *((int*)f->esp+2);
       file = (char*)arg1;
-      check_valid_pointer((void*)file);
+      file = check_physical_pointer((void*)file);
       f->eax = syscall_create(file, (unsigned int)arg2);
   		break;
     case SYS_REMOVE:
       check_valid_pointer((void*)((int*)f->esp + 1));
       arg1 = *((int*)f->esp+1);
       file = (char*)arg1;
-      check_valid_pointer((void*)file);
+      file = check_physical_pointer((void*)file);
       f->eax = syscall_remove(file);
       break;
   	case SYS_OPEN:
   		check_valid_pointer((void*)((int*)f->esp + 1));
       arg1 = *((int*)f->esp+1);
       file = (char*)arg1;
-      check_valid_pointer((void*)file);
+      file = check_physical_pointer((void*)file);
       f->eax = syscall_open(file);
       break;
   	case SYS_FILESIZE:
@@ -107,7 +110,8 @@ syscall_handler (struct intr_frame *f UNUSED)
       arg1 = *((int*)f->esp+1);
       arg2 = *((int*)f->esp+2);
       arg3 = *((int*)f->esp+3);
-      check_valid_pointer((void*)arg2);
+      // check_valid_pointer((void*)arg2);
+      arg2 = check_physical_pointer((void*)arg2);
       f->eax = syscall_read((int)arg1, (void*)arg2, (unsigned int)arg3);
       break;
   	case SYS_WRITE:
@@ -117,7 +121,8 @@ syscall_handler (struct intr_frame *f UNUSED)
 	  	arg1 = *((int*)f->esp+1);
 	  	arg2 = *((int*)f->esp+2);
 	  	arg3 = *((int*)f->esp+3);
-      check_valid_pointer((void*)arg2);
+      // check_valid_pointer((void*)arg2);
+      arg2 = check_physical_pointer((void*)arg2);
   		f->eax = syscall_write((int)arg1, (void*)arg2, (unsigned int)arg3);
   		break;
   	case SYS_SEEK:
@@ -156,6 +161,19 @@ void check_valid_pointer(void *pointer){
 		syscall_exit(-1);
 	if (!pagedir_get_page(thread_current()->pagedir, pointer))
 		syscall_exit(-1);
+}
+
+const char *check_physical_pointer(void *pointer){
+	if (pointer == NULL)
+		syscall_exit(-1);
+	if (is_user_vaddr(pointer) == false)
+		syscall_exit(-1);
+	if (is_kernel_vaddr(pointer))
+		syscall_exit(-1);
+	void * ret_value = (void *)pagedir_get_page(thread_current()->pagedir, pointer);
+	if (!ret_value)
+		syscall_exit(-1);
+	return (const char *)ret_value;
 }
 
 void syscall_halt (void){

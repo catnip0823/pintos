@@ -108,6 +108,7 @@ struct thread
     struct semaphore wait_child_process;
     struct file *process_files[PROCESS_FILE_MAX];
     int fd;
+    // bool whether_print_message;
     /* proj3 */
 #endif
 

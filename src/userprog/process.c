@@ -28,7 +28,6 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp, const ch
 tid_t
 process_execute (const char *file_name) 
 {
-
   char *fn_copy;
   tid_t tid;
 
@@ -37,11 +36,15 @@ process_execute (const char *file_name)
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
+
   strlcpy (fn_copy, file_name, PGSIZE);
 
   char *thread_name;
   char *arg_name = file_name;
-  thread_name = strtok_r(arg_name, " ", &arg_name);
+  char *useless_name;
+
+  thread_name = strtok_r(arg_name, " ", &useless_name);
+  // printf("hhhh\n");
   // printf("%s\n", file_name);
   // ASSERT(1==0);
 
@@ -56,7 +59,7 @@ process_execute (const char *file_name)
 
   enum intr_level old_level = intr_disable ();
   struct thread *children_thread = find_thread_with_tid(tid);
-  list_push_front(&thread_current()->process_children_list, &children_thread->process_children_elem);
+  list_push_back(&thread_current()->process_children_list, &children_thread->process_children_elem);
   intr_set_level (old_level);
   return tid;
 }
@@ -90,9 +93,10 @@ start_process (void *file_name_)
   success = load (thread_name, &if_.eip, &if_.esp, file_name_); //proj3
 
   /* If load failed, quit. */
-  palloc_free_page (file_name_);
+  palloc_free_page (cp_file);
 
   if (!success) {
+  	// thread_current()->whether_print_message = false;
     thread_exit ();
   }
 
@@ -150,7 +154,8 @@ process_exit (void)
   pd = cur->pagedir;
   if (pd != NULL) 
     {
-      printf("%s: exit(%d)\n", cur->name, cur->process_terminate_message);
+    	// if (cur->whether_print_message == true)
+    		printf("%s: exit(%d)\n", cur->name, cur->process_terminate_message);
       /* Correct ordering here is crucial.  We must set
          cur->pagedir to NULL before switching page directories,
          so that a timer interrupt can't switch back to the
@@ -357,6 +362,8 @@ load (const char *file_name, void (**eip) (void), void **esp, const char *whole_
   *eip = (void (*) (void)) ehdr.e_entry;
 
   success = true;
+  file_deny_write(file);
+
 
  done:
   /* We arrive here whether the load is successful or not. */
