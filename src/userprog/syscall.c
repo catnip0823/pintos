@@ -17,7 +17,9 @@ void check_valid_pointer(void *pointer);
 const char *check_physical_pointer(void *pointer);
 struct lock syscall_critical_section;
 
-
+int get_value(uint8_t * ptr);
+bool check_str(void* ptr);
+void check_pointer(void* pointer, size_t size);
 
 void syscall_halt (void);
 void syscall_exit (int status);
@@ -65,7 +67,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   		syscall_exit((int)arg1);
   		break;
   	case SYS_EXEC:
-      check_valid_pointer((void*)((int*)f->esp + 1));
+      check_pointer((void*)((int*)f->esp + 1), 4);
       arg1 = *((int*)f->esp+1);
       arg1 = check_physical_pointer((void*)arg1);
   		f->eax = syscall_exec((char *)arg1);
@@ -73,6 +75,9 @@ syscall_handler (struct intr_frame *f UNUSED)
   	case SYS_WAIT:
       check_valid_pointer((void*)((int*)f->esp + 1));
       arg1 = *((int*)f->esp+1);
+      t = *(char**)((int*)f->esp+1);
+      if (!check_str(t))
+        syscall_exit(-1);
       f->eax = syscall_wait((int)arg1);
   		break;
   	case SYS_CREATE:
@@ -151,6 +156,30 @@ syscall_handler (struct intr_frame *f UNUSED)
 
 }
 
+int get_value(uint8_t * ptr){
+  if (!is_user_vaddr(ptr))
+    return -1;
+  int retval;
+  asm ("movl $1f, %0; movzbl %1, %0; 1:"
+       : "=&a" (retval) : "m" (*uaddr));
+  return retval;
+}
+
+bool check_str(void* ptr){
+  char c;
+  c = get_value((uint8_t*)ptr);
+  while (c != '\0' && c != -1){
+    ptr++;
+    c = get_value((uint8_t*)ptr);
+  }
+  if (c == '\0')
+    return true;
+  return false;
+}
+
+void check_pointer(void* pointer, size_t size){
+  check_valid_pointer((uint8_t*)pointer + size - 1);
+}
 
 void check_valid_pointer(void *pointer){
 	if (pointer == NULL)
