@@ -46,7 +46,7 @@ static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
   // ASSERT(1==0);
-    check_valid_pointer((void *)f->esp);
+    check_pointer((void *)f->esp, 4);
 	// printf ("Hex dump:\n");
  //    uint32_t dw = (uint32_t) PHYS_BASE - (uint32_t) f->esp;
  //    hex_dump ((uintptr_t) f->esp, f->esp, dw, true);
