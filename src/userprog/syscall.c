@@ -10,6 +10,8 @@
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 
+#define MAX_CMD_LEN 50
+
 
 static void syscall_handler (struct intr_frame *);
 //proj3
@@ -18,7 +20,7 @@ const char *check_physical_pointer(void *pointer);
 struct lock syscall_critical_section;
 
 int get_value(uint8_t * ptr);
-bool check_str(void* ptr);
+void check_str(void* ptr);
 void check_pointer(void* pointer, size_t size);
 
 void syscall_halt (void);
@@ -69,17 +71,13 @@ syscall_handler (struct intr_frame *f UNUSED)
   	case SYS_EXEC:
       check_pointer((void*)((int*)f->esp + 1), 4);
       arg1 = *((int*)f->esp+1);
-      //if (!check_str(*(char**)(int*)f->esp+1))
-	      //syscall_exit(-1);
       arg1 = check_physical_pointer((void*)arg1);
+      check_str((char*)arg1)
   		f->eax = syscall_exec((char *)arg1);
       break;
   	case SYS_WAIT:
       check_valid_pointer((void*)((int*)f->esp + 1));
       arg1 = *((int*)f->esp+1);
-      //char* t = *(char**)((int*)f->esp+1);
-      //if (!check_str(t))
-       // syscall_exit(-1);
       f->eax = syscall_wait((int)arg1);
   		break;
   	case SYS_CREATE:
@@ -167,6 +165,7 @@ int get_value(uint8_t * ptr){
   return retval;
 }
 
+/*
 bool check_str(void* ptr){
   char c;
   c = get_value((uint8_t*)ptr);
@@ -177,6 +176,18 @@ bool check_str(void* ptr){
   if (c == '\0')
     return true;
   return false;
+}*/
+
+void check_str(char* ptr){
+  int t = 0;
+  while(t < MAX_CMD_LEN){
+    check_valid_pointer(ptr);
+    if (*ptr == '\0')
+      return;
+    t++;
+    ptr++;
+  }
+  syscall_exit(-1);
 }
 
 void check_pointer(void* pointer, size_t size){
