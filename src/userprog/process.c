@@ -60,6 +60,8 @@ process_execute (const char *file_name)
   enum intr_level old_level = intr_disable ();
   struct thread *children_thread = find_thread_with_tid(tid);
   list_push_back(&thread_current()->process_children_list, &children_thread->process_children_elem);
+  if (children_thread->check_load_success == false)
+    return -1;
   intr_set_level (old_level);
   return tid;
 }
@@ -96,7 +98,7 @@ start_process (void *file_name_)
   palloc_free_page (cp_file);
 
   if (!success) {
-  	// thread_current()->whether_print_message = false;
+  	thread_current()->check_load_success = false;
     thread_exit ();
   }
 
@@ -149,13 +151,51 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
+  if (cur->pagedir!=NULL){
+    printf("%s: exit(%d)\n", cur->name, cur->process_terminate_message);
+  }
+
+  
+  int whether_have_child = 0;
+  for (int i = 0; i < PROCESS_FILE_MAX; i++){
+    if (cur->process_files[i]){
+      // file_close(cur->process_files[i]);
+      // cur->process_files[i] = NULL;
+      whether_have_child = 1;
+      break;
+    }
+  }
+  // file_close(cur->exec);
+  for (int i = 0; i < PROCESS_FILE_MAX; i++){
+    if (cur->process_files[i]){
+      file_close(cur->process_files[i]);
+      cur->process_files[i] = NULL;
+      // whether_have_child = 1;
+      // break;
+    }
+  }
+
+
+
+
+
+  if (cur->this_file){
+    file_allow_write(cur->this_file);
+    file_close(cur->this_file);
+  }
+  // printf("hhhh\n");
+
+
+
+
+
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
   if (pd != NULL) 
     {
     	// if (cur->whether_print_message == true)
-    		printf("%s: exit(%d)\n", cur->name, cur->process_terminate_message);
+    		
       /* Correct ordering here is crucial.  We must set
          cur->pagedir to NULL before switching page directories,
          so that a timer interrupt can't switch back to the
@@ -363,11 +403,15 @@ load (const char *file_name, void (**eip) (void), void **esp, const char *whole_
 
   success = true;
   file_deny_write(file);
+  thread_current()->this_file = file;
+  return success;
 
 
  done:
+
   /* We arrive here whether the load is successful or not. */
   file_close (file);
+
   return success;
 }
 

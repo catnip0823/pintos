@@ -477,6 +477,8 @@ init_thread (struct thread *t, const char *name, int priority)
     t->process_files[i] = NULL;
   }
   t->fd = 2;
+  t->this_file = NULL;
+  t->check_load_success = true;
   // t->whether_print_message = true;
   #endif
 
