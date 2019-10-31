@@ -22,6 +22,8 @@ struct lock syscall_critical_section;
 int get_value(uint8_t * ptr);
 void check_str(char* ptr);
 void check_pointer(void* pointer, size_t size);
+char *check_str_pro (const char *us);
+int copy_to (uint8_t *dst, const uint8_t *usrc);
 
 void syscall_halt (void);
 void syscall_exit (int status);
@@ -72,8 +74,9 @@ syscall_handler (struct intr_frame *f UNUSED)
       check_pointer((void*)((int*)f->esp + 1), 4);
       arg1 = *((int*)f->esp+1);
       arg1 = check_physical_pointer((void*)arg1);
-      check_str((char*)arg1);
-  		f->eax = syscall_exec((char *)arg1);
+      //check_str((char*)arg1);
+      char *str = check_str_pro(*(char**)(f->esp+4));
+  		f->eax = syscall_exec(str);
       break;
   	case SYS_WAIT:
       check_valid_pointer((void*)((int*)f->esp + 1));
@@ -192,6 +195,41 @@ void check_str(char* ptr){
   ASSERT(4==0);
   syscall_exit(-1);
 }
+
+char *
+check_str_pro (const char *us)
+{
+  char *ks;
+  size_t length;
+
+  ks = palloc_get_page (0);
+  if (ks == NULL)
+    thread_exit ();
+
+  for (length = 0; length < PGSIZE; length++)
+    {
+      if (us >= (char *) PHYS_BASE || copy_to (ks + length, us++) == 0)
+        {
+          palloc_free_page (ks);
+          thread_exit ();
+        }
+
+      if (ks[length] == '\0')
+        return ks;
+    }
+  ks[PGSIZE - 1] = '\0';
+  return ks;
+}
+
+int
+copy_to (uint8_t *dst, const uint8_t *usrc)
+{
+  int eax;
+  asm ("movl $1f, %%eax; movb %2, %%al; movb %%al, %0; 1:"
+       : "=m" (*dst), "=&a" (eax) : "m" (*usrc));
+  return eax;
+}
+
 
 void check_pointer(void* pointer, size_t size){
   check_valid_pointer((uint8_t*)pointer + size - 1);
