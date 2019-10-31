@@ -516,6 +516,7 @@ setup_stack (void **esp, const char *whole_name)
         for (int i = num_argv - 1; i >= 0; i--){
           *esp = *esp - (strlen(argv[i]) + 1);
           memcpy(*esp, argv[i], strlen(argv[i]) + 1);
+	  *(char*)(*esp+strlen(argv[i])) = '\0'; 
           temp_stack_pointer[i] = *esp;
         }
 

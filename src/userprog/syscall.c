@@ -20,7 +20,7 @@ const char *check_physical_pointer(void *pointer);
 struct lock syscall_critical_section;
 
 int get_value(uint8_t * ptr);
-void check_str(void* ptr);
+void check_str(char* ptr);
 void check_pointer(void* pointer, size_t size);
 
 void syscall_halt (void);
@@ -72,7 +72,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       check_pointer((void*)((int*)f->esp + 1), 4);
       arg1 = *((int*)f->esp+1);
       arg1 = check_physical_pointer((void*)arg1);
-      check_str((char*)arg1)
+      check_str((char*)arg1);
   		f->eax = syscall_exec((char *)arg1);
       break;
   	case SYS_WAIT:
@@ -181,12 +181,15 @@ bool check_str(void* ptr){
 void check_str(char* ptr){
   int t = 0;
   while(t < MAX_CMD_LEN){
-    check_valid_pointer(ptr);
+    if(is_user_vaddr(ptr) == false){
+	    ASSERT(5 == 1);
+	    syscall_exit(-1);}
     if (*ptr == '\0')
       return;
     t++;
     ptr++;
   }
+  ASSERT(4==0);
   syscall_exit(-1);
 }
 
