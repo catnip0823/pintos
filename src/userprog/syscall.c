@@ -75,8 +75,8 @@ syscall_handler (struct intr_frame *f UNUSED)
       arg1 = *((int*)f->esp+1);
       arg1 = check_physical_pointer((void*)arg1);
       //check_str((char*)arg1);
-      char *str = check_str_pro(*(char**)(f->esp+4));
-  		f->eax = syscall_exec(str);
+      //char *str = check_str_pro(*(char**)(f->esp+4));
+  		f->eax = syscall_exec((int)arg1);
       break;
   	case SYS_WAIT:
       check_valid_pointer((void*)((int*)f->esp + 1));
