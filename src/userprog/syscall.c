@@ -303,27 +303,25 @@ bool syscall_remove (const char *file){
 int syscall_open (const char *file){
   lock_acquire(&syscall_critical_section);
   struct file *new_file_open = filesys_open(file);
+  lock_release(&syscall_critical_section);
   if (!new_file_open){
-    lock_release(&syscall_critical_section);
     return -1;
   }
   thread_current()->process_files[thread_current()->fd-2] = new_file_open;
   int ret_value = thread_current()->fd;
   thread_current()->fd++;
-  lock_release(&syscall_critical_section);
   return ret_value;
 }
 
 int syscall_filesize (int fd){
-  lock_acquire(&syscall_critical_section);
+  
   if (fd-2 >= PROCESS_FILE_MAX){
-    lock_release(&syscall_critical_section);
     return -1;
   }
   if (!thread_current()->process_files[fd-2]){
-    lock_release(&syscall_critical_section);
     return -1;
   }
+  lock_acquire(&syscall_critical_section);
   struct file *current_file = thread_current()->process_files[fd-2];
   int ret_value = (int)file_length(current_file);
   lock_release(&syscall_critical_section);
@@ -331,95 +329,82 @@ int syscall_filesize (int fd){
 }
 
 int syscall_read (int fd, void *buffer, unsigned size){
-  lock_acquire(&syscall_critical_section);
   if (fd == 0){
-    lock_release(&syscall_critical_section);
     return (int)input_getc();
   }
   if (fd == 1){
-    lock_release(&syscall_critical_section);
     return 0;
   }
   if (fd <= 1 || fd-2 >= PROCESS_FILE_MAX){
-    lock_release(&syscall_critical_section);
     return 0;
   }
   if (!thread_current()->process_files[fd-2]){
-    lock_release(&syscall_critical_section);
     return 0;
   }
   struct file *current_file = thread_current()->process_files[fd-2];
+  lock_acquire(&syscall_critical_section);
   int ret_value = (int)file_read(current_file, buffer, size);
   lock_release(&syscall_critical_section);
   return ret_value;
 }
 
 int syscall_write (int fd, const void *buffer, unsigned size){
-  lock_acquire(&syscall_critical_section);
 	if (fd == 1){
 		putbuf(buffer, size);
     lock_release(&syscall_critical_section);
 		return size;
 	}
 	if (fd == 0){
-    lock_release(&syscall_critical_section);
     return 0;
   }
   if (fd <= 1 || fd-2 >= PROCESS_FILE_MAX){
-    lock_release(&syscall_critical_section);
     return 0;
   }
   if (!thread_current()->process_files[fd-2]){
-    lock_release(&syscall_critical_section);
     return 0;
   }
   struct file *current_file = thread_current()->process_files[fd-2];
+  lock_acquire(&syscall_critical_section);
   int ret_value = (int)file_write(current_file, buffer, size);
   lock_release(&syscall_critical_section);
   return ret_value;
 }
 
 void syscall_seek (int fd, unsigned position){
-  lock_acquire(&syscall_critical_section);
   if (fd-2 >= PROCESS_FILE_MAX || fd < 2){
-    lock_release(&syscall_critical_section);
     return;
   }
   if (!thread_current()->process_files[fd-2]){
-    lock_release(&syscall_critical_section);
     return;
   }
   struct file *current_file = thread_current()->process_files[fd-2];
+  lock_acquire(&syscall_critical_section);
   file_seek(current_file, position);
   lock_release(&syscall_critical_section);
   return;
 }
 unsigned syscall_tell (int fd){
-  lock_acquire(&syscall_critical_section);
   if (fd-2 >= PROCESS_FILE_MAX || fd < 2){
-    lock_release(&syscall_critical_section);
     return;
   }
   if (!thread_current()->process_files[fd-2]){
-    lock_release(&syscall_critical_section);
     return;
   }
   struct file *current_file = thread_current()->process_files[fd-2];
+  lock_acquire(&syscall_critical_section);
   unsigned ret_value = (unsigned)file_tell(current_file);
   lock_release(&syscall_critical_section);
   return ret_value;
 }
 void syscall_close (int fd){
-  lock_acquire(&syscall_critical_section);
   if (fd-2 >= PROCESS_FILE_MAX || fd < 2){
-    lock_release(&syscall_critical_section);
     return;
   }
   if (!thread_current()->process_files[fd-2]){
-    lock_release(&syscall_critical_section);
     return;
   }
-  struct file *current_file = thread_current()->process_files[fd-2];
+  struct file *current_file = thread_current()->process_files[fd-2]; 
+  lock_acquire(&syscall_critical_section);
   file_close(current_file);
   thread_current()->process_files[fd-2] = NULL;
   lock_release(&syscall_critical_section);
