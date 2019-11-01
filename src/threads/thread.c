@@ -470,15 +470,20 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   t->wait_value = 0;
+
   #ifdef USERPROG
   sema_init (&t->wait_child_process, 0);
+  sema_init(&t->child_lock, 0);
   list_init (&t->process_children_list);
   for (int i = 0; i < PROCESS_FILE_MAX; i++){
     t->process_files[i] = NULL;
   }
   t->fd = 2;
+  t->parent = running_thread();
   t->this_file = NULL;
+  sema_init(&t->child_lock, 0);
   t->check_load_success = true;
+  // t->check_load_success = false;
   // t->whether_print_message = true;
   #endif
 

@@ -52,16 +52,27 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (thread_name, PRI_DEFAULT, start_process, fn_copy);
 
+
   if (tid == TID_ERROR){
     palloc_free_page (fn_copy); 
     return tid;
   }
 
+
+
+
+
   enum intr_level old_level = intr_disable ();
   struct thread *children_thread = find_thread_with_tid(tid);
+
+  sema_down(&thread_current()->child_lock);
+  if (thread_current()->check_load_success == false){
+  	// printf("hhh\n");
+  	return -1;
+  }
+    
   list_push_back(&thread_current()->process_children_list, &children_thread->process_children_elem);
-  if (children_thread->check_load_success == false)
-    return -1;
+  
   intr_set_level (old_level);
   return tid;
 }
@@ -98,8 +109,18 @@ start_process (void *file_name_)
   palloc_free_page (cp_file);
 
   if (!success) {
-  	thread_current()->check_load_success = false;
+  	// printf("zzzzzzzzzzzzzzzzzzzz\n");
+  	// printf("%d\n", thread_current()->tid);
+  	// printf("%d\n", thread_current()->parent->tid);
+  	thread_current()->parent->check_load_success = false;
+  	sema_up(&thread_current()->parent->child_lock);
+
+  	
     thread_exit ();
+  }
+  else{
+  	thread_current()->parent->check_load_success = true;
+  	sema_up(&thread_current()->parent->child_lock);
   }
 
 
@@ -152,8 +173,10 @@ process_exit (void)
   uint32_t *pd;
 
   if (cur->pagedir!=NULL){
+  	if (thread_current()->parent->check_load_success){
     printf("%s: exit(%d)\n", cur->name, cur->process_terminate_message);
   }
+}
 
   
   int whether_have_child = 0;
@@ -316,6 +339,14 @@ load (const char *file_name, void (**eip) (void), void **esp, const char *whole_
 
   /* Open executable file. */
   file = filesys_open (file_name);
+  if (file == NULL){
+  	// printf("jjjj\n");
+  	// thread_current()->process_terminate_message = 
+  
+  	return false;
+  }
+
+
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);

@@ -109,6 +109,8 @@ struct thread
     struct file *process_files[PROCESS_FILE_MAX];
     int fd;
     bool check_load_success;
+    struct semaphore child_lock;
+    struct thread* parent;
 
     struct file *this_file;
     // bool whether_print_message;
