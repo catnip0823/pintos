@@ -28,35 +28,32 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp, const ch
 tid_t
 process_execute (const char *file_name) 
 {
-  char *fn_copy;
+	// printf("%s\n", file_name);
+  // char *fn_copy;
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
-    return TID_ERROR;
-
-  strlcpy (fn_copy, file_name, PGSIZE);
-
-  char *thread_name;
-  char *arg_name = file_name;
-  char *useless_name;
-
-  thread_name = strtok_r(arg_name, " ", &useless_name);
-  // printf("hhhh\n");
-  // printf("%s\n", file_name);
-  // ASSERT(1==0);
+  char *fn_copy = malloc(strlen(file_name) + 1);
+  strlcpy(fn_copy, file_name, strlen(file_name) + 1);
 
 
-  /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (thread_name, PRI_DEFAULT, start_process, fn_copy);
+  char *copy_to_cut = malloc(strlen(file_name) + 1);
+  strlcpy(copy_to_cut, file_name, strlen(file_name) + 1);
+
+
+  char *save_ptr;
+  char *cut;
+  cut = strtok_r(copy_to_cut," ",&save_ptr);
+  tid = thread_create (cut, PRI_DEFAULT, start_process, fn_copy);
+  free (cut);
 
 
   if (tid == TID_ERROR){
-    palloc_free_page (fn_copy); 
+    free (fn_copy); 
     return tid;
   }
+
 
 
 
@@ -67,6 +64,7 @@ process_execute (const char *file_name)
 
   sema_down(&thread_current()->child_lock);
   if (thread_current()->check_load_success == false){
+  	// palloc_free_page (fn_copy); 
   	// printf("hhh\n");
   	return -1;
   }
@@ -74,6 +72,7 @@ process_execute (const char *file_name)
   list_push_back(&thread_current()->process_children_list, &children_thread->process_children_elem);
   
   intr_set_level (old_level);
+  // palloc_free_page (fn_copy); 
   return tid;
 }
 
@@ -83,6 +82,7 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
+	// printf("%s\n", file_name_);
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
@@ -104,7 +104,6 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (thread_name, &if_.eip, &if_.esp, file_name_); //proj3
-
   /* If load failed, quit. */
   palloc_free_page (cp_file);
 
@@ -114,6 +113,7 @@ start_process (void *file_name_)
   	// printf("%d\n", thread_current()->parent->tid);
   	thread_current()->parent->check_load_success = false;
   	sema_up(&thread_current()->parent->child_lock);
+
 
   	
     thread_exit ();
