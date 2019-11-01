@@ -350,6 +350,7 @@ int syscall_read (int fd, void *buffer, unsigned size){
 
 int syscall_write (int fd, const void *buffer, unsigned size){
 	if (fd == 1){
+    lock_acquire(&syscall_critical_section);
 		putbuf(buffer, size);
     lock_release(&syscall_critical_section);
 		return size;
@@ -383,6 +384,7 @@ void syscall_seek (int fd, unsigned position){
   lock_release(&syscall_critical_section);
   return;
 }
+
 unsigned syscall_tell (int fd){
   if (fd-2 >= PROCESS_FILE_MAX || fd < 2){
     return;
@@ -396,6 +398,7 @@ unsigned syscall_tell (int fd){
   lock_release(&syscall_critical_section);
   return ret_value;
 }
+
 void syscall_close (int fd){
   if (fd-2 >= PROCESS_FILE_MAX || fd < 2){
     return;
