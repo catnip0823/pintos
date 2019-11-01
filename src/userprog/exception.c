@@ -159,5 +159,6 @@ page_fault (struct intr_frame *f)
           write ? "writing" : "reading",
           user ? "user" : "kernel");
   kill (f);
+  syscall_exit(-1);
 }
 

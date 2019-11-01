@@ -171,12 +171,15 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+ 
+  enum intr_level old_level;
+  old_level = intr_disable();
 
-  if (cur->pagedir!=NULL){
-  	if (thread_current()->parent->check_load_success){
+  if (cur->pagedir && thread_current()->parent->check_load_success){
     printf("%s: exit(%d)\n", cur->name, cur->process_terminate_message);
   }
-}
+  //intr_set_level(old_level);
+
 
   
   int whether_have_child = 0;
@@ -197,6 +200,8 @@ process_exit (void)
       // break;
     }
   }
+  intr_set_level(old_level);
+
 
 
 
