@@ -102,6 +102,7 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+#endif
     int process_terminate_message;
     struct list_elem process_children_elem;
     struct list process_children_list;
@@ -115,7 +116,7 @@ struct thread
     struct file *this_file;
     // bool whether_print_message;
     /* proj3 */
-#endif
+
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
