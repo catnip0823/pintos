@@ -142,7 +142,6 @@ process_wait (tid_t child_tid UNUSED){
       /* If not already be waited. */
       if (child_thread->bewaited == false){
         child_thread->bewaited = true;
-        sema_down(&child_thread->wait_child_process);
         check_is_child = 1;
         break;
       }
@@ -153,6 +152,7 @@ process_wait (tid_t child_tid UNUSED){
   /* If not found. */
   if (!check_is_child)
     return -1;
+  sema_down(&child_thread->wait_child_process);
   /* Return the terminate message and remove it. */
   int ret_value = child_thread->process_terminate_message;
   list_remove(item);
