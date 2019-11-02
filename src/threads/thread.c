@@ -133,6 +133,7 @@ thread_tick (void)
   if (t == idle_thread)
     idle_ticks++;
 #ifdef USERPROG
+  /* If the pade dir is null. */
   else if (t->pagedir != NULL)
     user_ticks++;
 #endif
@@ -288,6 +289,7 @@ thread_exit (void)
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
+  /* Sema up when exit the thread. */
   sema_up(&thread_current()->wait_child_process);
   process_exit ();
 #endif
@@ -472,19 +474,21 @@ init_thread (struct thread *t, const char *name, int priority)
   t->wait_value = 0;
 
   #ifdef USERPROG
+  /* Init the semaphore in the thread of lock. */
   sema_init (&t->wait_child_process, 0);
   sema_init(&t->child_lock, 0);
+  /* Initialize the child list. */
   list_init (&t->process_children_list);
-  for (int i = 0; i < PROCESS_FILE_MAX; i++){
+  /* Initialize the file list. */
+  for (int i = 0; i < PROCESS_FILE_MAX; i++)
     t->process_files[i] = NULL;
-  }
   t->fd = 2;
+  /* Set the pointer to the parent. */
   t->parent = running_thread();
   t->this_file = NULL;
+  /* Init the semaphore. */
   sema_init(&t->child_lock, 0);
   t->check_load_success = true;
-  // t->check_load_success = false;
-  // t->whether_print_message = true;
   #endif
 
   old_level = intr_disable ();
@@ -628,12 +632,15 @@ void wait_iterupt_function(void)
     intr_set_level(old_level);
 }
 
+
+/* Used to push back to the list. */
 void list_push_back_function(struct thread *curr){
     list_push_back(&waiting_list, &curr->wait_elem);
     schedule ();
 }
 
 
+/* Find the thread with max priority. */
 bool my_find_max_function(struct list_elem* elem1, struct list_elem* elem2, void *aux UNUSED){
     if (list_entry(elem1, struct thread, elem)->priority < list_entry(elem2, struct thread, elem)->priority)
         return true;
@@ -641,7 +648,8 @@ bool my_find_max_function(struct list_elem* elem1, struct list_elem* elem2, void
 };
 
 
-
+/* Find the thread with given tid, by iterate through 
+   all the thread. Return a pointer to the thread.*/
 struct thread * find_thread_with_tid(int tid){
   struct list_elem *e;
   ASSERT (intr_get_level () == INTR_OFF);
