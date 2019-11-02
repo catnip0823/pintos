@@ -53,14 +53,12 @@ process_execute (const char *file_name){
     return tid;
   }
 
-
- /* sema down the child_lock. */
+  /* sema down the child_lock. */
   sema_down(&thread_current()->child_lock);
 
   /* If failed to do so, return -1 as an error. */
   if (thread_current()->check_load_success == false)
   	return -1;
-  
 
   return tid;
 }
@@ -131,13 +129,17 @@ process_wait (tid_t child_tid UNUSED){
 	struct list_elem *item;
   struct struct_child *child_thread;
 
+  /* Indicate whether is a child.*/
   int check_is_child = 0;
+  /* Iterate through the list to find the thread with tid. */
   for (item = list_begin (&thread_current()->child_list);
     item != list_end (&thread_current()->child_list);
-    item = list_next (item))
-  {
-    child_thread = list_entry (item, struct struct_child, child_thread_elem);
+    item = list_next (item)){
+    child_thread = list_entry (item, 
+                      struct struct_child, child_thread_elem);
+    /* If find the given tid. */
     if (child_thread->tid == child_tid){
+      /* If not already be waited. */
       if (child_thread->bewaited == false){
         child_thread->bewaited = true;
         sema_down(&child_thread->wait_child_process);
@@ -148,11 +150,13 @@ process_wait (tid_t child_tid UNUSED){
         return -1;
     }
   }
+  /* If not found. */
   if (!check_is_child)
     return -1;
-
+  /* Return the terminate message and remove it. */
   int ret_value = child_thread->process_terminate_message;
   list_remove(item);
+  /* Also, free the resourse. */
   free(child_thread);
   return ret_value;
 }
@@ -538,8 +542,7 @@ setup_stack (void **esp, const char *whole_name)
   bool success = false;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  if (kpage != NULL) 
-    {
+  if (kpage != NULL) {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success){
         /* Stack initialization code insipired by the work of pindexis

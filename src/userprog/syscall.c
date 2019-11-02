@@ -64,7 +64,6 @@ syscall_handler (struct intr_frame *f UNUSED){
 	int arg2;
 	int arg3;
   char *file;
-  // printf("%d\n", *(int*) f->esp);
 
   /* Determine the type of system call. */
   switch(*(int*) f->esp){
@@ -82,7 +81,6 @@ syscall_handler (struct intr_frame *f UNUSED){
       check_valid_pointer((void*)((int*)f->esp + 1));
       check_valid_pointer((void*)*((int*)f->esp + 1));
       arg1 = *((int*)f->esp+1);
-      // arg1 = check_physical_pointer((void*)arg1);
   		f->eax = syscall_exec((int)arg1);
       break;
   	case SYS_WAIT:
@@ -169,7 +167,6 @@ syscall_handler (struct intr_frame *f UNUSED){
   	  syscall_exit(-1);
   }
 }
-
 
 
 /* Check the validity of the given pointer, including
