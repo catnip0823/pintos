@@ -178,7 +178,7 @@ process_exit (void)
   if (cur->pagedir && thread_current()->parent->check_load_success){
     printf("%s: exit(%d)\n", cur->name, cur->process_terminate_message);
   }
-  //intr_set_level(old_level);
+
 
 
   
@@ -200,7 +200,7 @@ process_exit (void)
       // break;
     }
   }
-  intr_set_level(old_level);
+  //intr_set_level(old_level);
 
 
 
@@ -211,7 +211,7 @@ process_exit (void)
     file_allow_write(cur->this_file);
     file_close(cur->this_file);
   }
-  // printf("hhhh\n");
+  intr_set_level(old_level);
 
 
 
