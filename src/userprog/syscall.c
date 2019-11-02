@@ -79,14 +79,10 @@ syscall_handler (struct intr_frame *f UNUSED){
   		break;
   	case SYS_EXEC:
       /* Check validity of argument. */
-  	// printf("hhhh\n");
       check_valid_pointer((void*)((int*)f->esp + 1));
       check_valid_pointer((void*)*((int*)f->esp + 1));
-      // printf("hhhh\n");
       arg1 = *((int*)f->esp+1);
       // arg1 = check_physical_pointer((void*)arg1);
-      //check_str((char*)arg1);
-      //char *str = check_str_pro(*(char**)(f->esp+4));
   		f->eax = syscall_exec((int)arg1);
       break;
   	case SYS_WAIT:
@@ -174,79 +170,6 @@ syscall_handler (struct intr_frame *f UNUSED){
   }
 }
 
-
-int 
-get_value(uint8_t * ptr){
-  if (!is_user_vaddr(ptr))
-    return -1;
-  int retval;
-  asm ("movl $1f, %0; movzbl %1, %0; 1:"
-       : "=&a" (retval) : "m" (*ptr));
-  return retval;
-}
-
-/*
-bool check_str(void* ptr){
-  char c;
-  c = get_value((uint8_t*)ptr);
-  while (c != '\0' && c != -1){
-    ptr++;
-    c = get_value((uint8_t*)ptr);
-  }
-  if (c == '\0')
-    return true;
-  return false;
-}*/
-
-void 
-check_str(char* ptr){
-  int t = 0;
-  while(t < MAX_CMD_LEN){
-    if(is_user_vaddr(ptr) == false){
-	    ASSERT(5 == 1);
-	    syscall_exit(-1);}
-    if (*ptr == '\0')
-      return;
-    t++;
-    ptr++;
-  }
-  ASSERT(4==0);
-  syscall_exit(-1);
-}
-
-char *
-check_str_pro (const char *us)
-{
-  char *ks;
-  size_t length;
-
-  ks = palloc_get_page (0);
-  if (ks == NULL)
-    thread_exit ();
-
-  for (length = 0; length < PGSIZE; length++)
-    {
-      if (us >= (char *) PHYS_BASE || copy_to (ks + length, us++) == 0)
-        {
-          palloc_free_page (ks);
-          thread_exit ();
-        }
-
-      if (ks[length] == '\0')
-        return ks;
-    }
-  ks[PGSIZE - 1] = '\0';
-  return ks;
-}
-
-int
-copy_to (uint8_t *dst, const uint8_t *usrc)
-{
-  int eax;
-  asm ("movl $1f, %%eax; movb %2, %%al; movb %%al, %0; 1:"
-       : "=m" (*dst), "=&a" (eax) : "m" (*usrc));
-  return eax;
-}
 
 
 /* Check the validity of the given pointer, including
@@ -429,9 +352,7 @@ syscall_read (int fd, void *buffer, unsigned size){
 int syscall_write (int fd, const void *buffer, unsigned size){
   /* If it is to write to console. */
 	if (fd == 1){
-    lock_acquire(&syscall_critical_section);
 		putbuf(buffer, size);
-    lock_release(&syscall_critical_section);
 		return size;
 	}
   /* If fd == 0, then return 0. */
