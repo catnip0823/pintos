@@ -97,26 +97,40 @@ struct thread
     struct list_elem elem;              /* List element. */
     struct list_elem wait_elem;         /* List element. */
 
-    int64_t wait_value;                 /**/
+    int64_t wait_value;                 /* Remaining wait time. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
 #endif
+    /* The terminate messge of thread.*/
     int process_terminate_message;
+
+    /* The list of children, and element as a child.*/
     struct list_elem process_children_elem;
     struct list process_children_list;
+
+    /* Semaphore used in wait child process. */
     struct semaphore wait_child_process;
+
+    /* The file that the procss has. */
     struct file *process_files[PROCESS_FILE_MAX];
+
+    /* fd value of the process. */
     int fd;
+
+    /* Indicate whether the load is success. */
     bool check_load_success;
+
+    /* Semaphore on the lock*/
     struct semaphore child_lock;
+
+    /* Pointer to the parent thread. */
     struct thread* parent;
 
+    /* Pointer to the file itself. */
     struct file *this_file;
-    // bool whether_print_message;
     /* proj3 */
-
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
