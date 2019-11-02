@@ -352,7 +352,9 @@ syscall_read (int fd, void *buffer, unsigned size){
 int syscall_write (int fd, const void *buffer, unsigned size){
   /* If it is to write to console. */
 	if (fd == 1){
+		lock_acquire(&syscall_critical_section);
 		putbuf(buffer, size);
+		lock_release(&syscall_critical_section);
 		return size;
 	}
   /* If fd == 0, then return 0. */
