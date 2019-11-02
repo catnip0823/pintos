@@ -53,11 +53,6 @@ process_execute (const char *file_name){
     return tid;
   }
 
-  /* Disbale interupt to make it atomic. */
-  enum intr_level old_level = intr_disable ();
-
-  /* Find the thread with given tid. */
-  struct thread *children_thread = find_thread_with_tid(tid);
 
  /* sema down the child_lock. */
   sema_down(&thread_current()->child_lock);
@@ -66,11 +61,7 @@ process_execute (const char *file_name){
   if (thread_current()->check_load_success == false)
   	return -1;
   
-  /* Push back to the child-list. */  
-  list_push_back(&thread_current()->process_children_list, 
-                 &children_thread->process_children_elem);
-  
-  intr_set_level (old_level);
+
   return tid;
 }
 
@@ -138,31 +129,32 @@ start_process (void *file_name_){
 int
 process_wait (tid_t child_tid UNUSED){
 	struct list_elem *item;
-  struct thread *child_thread;
-  /* Indicate find the thread or not. */
-  int check_in_children_list = 0;
-  /* Iterate through the list to find the thread. */
-  for (item = list_begin (&thread_current()->process_children_list);
-       item != list_end (&thread_current()->process_children_list); 
-       item = list_next (item)) {
-    /* Get the thread. */
-    struct thread *item_thread = list_entry(item, 
-                               struct thread, process_children_elem);
-    /* If the given tid was found. */
-    if (item_thread->tid == child_tid){
-      child_thread = item_thread;
-      check_in_children_list = 1;
-      break;
+  struct struct_child *child_thread;
+
+  int check_is_child = 0;
+  for (item = list_begin (&thread_current()->child_list);
+    item != list_end (&thread_current()->child_list);
+    item = list_next (item))
+  {
+    child_thread = list_entry (item, struct struct_child, child_thread_elem);
+    if (child_thread->tid == child_tid){
+      if (child_thread->bewaited == false){
+        child_thread->bewaited = true;
+        sema_down(&child_thread->wait_child_process);
+        check_is_child = 1;
+        break;
+      }
+      else
+        return -1;
     }
   }
-  /* If not found, return error. */
-  if (check_in_children_list == 0)
+  if (!check_is_child)
     return -1;
 
-  /* Turn down the sema and remove the element. */
-  sema_down(&child_thread->wait_child_process);
-  list_remove(&child_thread->process_children_elem);
-  return child_thread->process_terminate_message;
+  int ret_value = child_thread->process_terminate_message;
+  list_remove(item);
+  free(child_thread);
+  return ret_value;
 }
 
 

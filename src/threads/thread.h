@@ -26,6 +26,14 @@ typedef int tid_t;
 #define PRI_MAX 63                      /* Highest priority. */
 #define PROCESS_FILE_MAX 128         /* proj2 */
 
+struct struct_child
+  {
+    tid_t tid;
+    int process_terminate_message;
+    bool bewaited;
+    struct list_elem child_thread_elem;
+    struct semaphore wait_child_process;
+  };
 
 /* A kernel thread or user process.
 
@@ -107,11 +115,10 @@ struct thread
     int process_terminate_message;
 
     /* The list of children, and element as a child.*/
-    struct list_elem process_children_elem;
-    struct list process_children_list;
+    struct list child_list;
+    struct struct_child *children;
 
     /* Semaphore used in wait child process. */
-    struct semaphore wait_child_process;
 
     /* The file that the procss has. */
     struct file *process_files[PROCESS_FILE_MAX];

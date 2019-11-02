@@ -204,6 +204,12 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  t->children = malloc(sizeof(struct struct_child));
+  t->children->tid = tid;
+  t->children->bewaited = false;
+  sema_init(&t->children->wait_child_process, 0);
+  list_push_back (&thread_current()->child_list, &t->children->child_thread_elem);
+
   /* Add to run queue. */
   thread_unblock (t);
 
@@ -290,8 +296,9 @@ thread_exit (void)
 
 #ifdef USERPROG
   /* Sema up when exit the thread. */
-  sema_up(&thread_current()->wait_child_process);
   process_exit ();
+  thread_current()->children->process_terminate_message = thread_current()->process_terminate_message;
+  sema_up(&thread_current()->children->wait_child_process);
 #endif
 
   /* Remove thread from all threads list, set our status to dying,
@@ -475,10 +482,9 @@ init_thread (struct thread *t, const char *name, int priority)
 
   #ifdef USERPROG
   /* Init the semaphore in the thread of lock. */
-  sema_init (&t->wait_child_process, 0);
   sema_init(&t->child_lock, 0);
   /* Initialize the child list. */
-  list_init (&t->process_children_list);
+  list_init(&t->child_list);
   /* Initialize the file list. */
   for (int i = 0; i < PROCESS_FILE_MAX; i++)
     t->process_files[i] = NULL;
