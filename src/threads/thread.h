@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/synch.h"
+#include "vm/page.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -150,6 +151,8 @@ struct thread
     /* Pointer to the file itself. */
     struct file *this_file;
     /* proj3 */
+
+    struct hash spage_table;
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
