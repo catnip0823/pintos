@@ -10,6 +10,20 @@
 #define MAX_STACK_SIZE (1024 * 1024)
 
 
+static unsigned splmt_hash_func(const struct hash_elem e, void* aux UNUSED);
+static bool splmt_hash_less_func(const struct hash_elem* elem1, 
+					 const struct hash_elem* elem1, void* aux UNUSED);
+static void hash_destroy_func(struct hash_elem* e, void* aux UNUSED);
+static struct splmt_page_entry*
+creat_entry();
+static bool
+install_code_page(struct splmt_page_entry* spte);
+static bool
+install_mmap_page(struct splmt_page_entry* spte);
+static bool
+install_file_page(struct splmt_page_entry* spte);
+
+
 /* Function required by the hash table,
    use the user virtual address as the 
    key, obviously it is unique in table. */
@@ -47,8 +61,15 @@ spage_table_init(struct hash* table){
 
 /* Function used to free the hash table. */
 static void
-free_spte_elem(struct hash_elem* e, void* aux UNUSED){
-	/* Not implement yet. */
+hash_destroy_func(struct hash_elem* e, void* aux UNUSED){
+	struct splmt_page_entry* spte = hash_entry(e,
+		                 struct splmt_page_entry*, elem);
+	if (spte->loaded){
+		pagedir_clear_page(thread_current()->pagedir, spe->user_vaddr);
+		palloc_free_page(spte->fte->frame_addr);
+		frame_free_entry(spte->fte->frame_addr);
+	}
+	free(spte);
 }
 
 
@@ -249,4 +270,35 @@ spage_table_install_page(struct splmt_page_entry* spte){
 	if (type == FILE)
 		return install_file_page(spte);
 	return false;
+}
+
+
+/* Grow stack when necessary, return whether it succeed. */
+bool
+spage_table_grow_stack(void* user_vaddr){
+	if ((size_t)(PHYS_BASE - pg_round_down(user_vaddr)) > MAX_STACK_SIZE)
+	 	return false;
+	struct splmt_page_entry* spte = (struct splmt_page_entry*) malloc(
+										sizeof(splmt_page_entry));
+	if (spte == NULL)
+		return false;
+	spte->attached = true;
+	spte->writable = true;
+	spte->loaded = true;
+	spte->user_vaddr = pg_round_down(user_vaddr);
+	spte->type = CODE;
+
+	uint8_t* frame_addr = frame_alloc(spte, PAL_USER);
+	if (frame_addr == NULL){
+		free(spte);
+		return false;
+	}
+	spte->frame_addr = frame_addr;
+	if (!install_page(spte->user_vaddr, frame_addr, true)){
+		frame_free_entry(frame_addr);
+		free(spte);
+		return false;
+	}
+	hash_insert(&(thread_current()->spage_table), spte);
+	return true;
 }

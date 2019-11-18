@@ -120,10 +120,10 @@ struct thread
 
     int64_t wait_value;                 /* Remaining wait time. */
 
-#ifdef USERPROG
+//#ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-#endif
+//#endif
     /* The terminate messge of thread.*/
     int process_terminate_message;
 
