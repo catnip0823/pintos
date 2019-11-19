@@ -2,7 +2,12 @@
 #include "threads/palloc.h"
 #include "threads/malloc.h"
 #include "threads/synch.h"
+#include "threads/interrupt.h"
+#include "threads/vaddr.h"
+#include "userprog/process.h"
+#include "userprog/syscall.h"
 #include "userprog/pagedir.h"
+#include "filesys/file.h"
 #include "vm/page.h"
 #include "vm/frame.h"
 #include <stdbool.h>
@@ -10,9 +15,9 @@
 #define MAX_STACK_SIZE (1024 * 1024)
 
 
-static unsigned splmt_hash_func(const struct hash_elem e, void* aux UNUSED);
+static unsigned splmt_hash_func(const struct hash_elem *e, void* aux UNUSED);
 static bool splmt_hash_less_func(const struct hash_elem* elem1, 
-					 const struct hash_elem* elem1, void* aux UNUSED);
+					 const struct hash_elem* elem2, void* aux UNUSED);
 static void hash_destroy_func(struct hash_elem* e, void* aux UNUSED);
 static struct splmt_page_entry*
 creat_entry();
@@ -28,10 +33,10 @@ install_file_page(struct splmt_page_entry* spte);
    use the user virtual address as the 
    key, obviously it is unique in table. */
 static unsigned
-splmt_hash_func(const struct hash_elem e, void* aux UNUSED){
+splmt_hash_func(const struct hash_elem * e, void* aux UNUSED){
 	struct splmt_page_entry* spte = hash_entry(e, 
 								struct splmt_page_entry, elem);
-	retval = hash_bytes(spte->user_vaddr, sizeof(spte->user_vaddr));
+	unsigned retval = hash_bytes(spte->user_vaddr, sizeof(spte->user_vaddr));
 	return retval;
 }
 
@@ -41,7 +46,7 @@ splmt_hash_func(const struct hash_elem e, void* aux UNUSED){
    address to compare two entries. */
 static bool
 splmt_hash_less_func(const struct hash_elem* elem1, 
-					 const struct hash_elem* elem1, void* aux UNUSED){
+					 const struct hash_elem* elem2, void* aux UNUSED){
 	struct splmt_page_entry* entry1 = hash_entry(
 								elem1, struct splmt_page_entry, elem);
 	struct splmt_page_entry* entry2 = hash_entry(
@@ -63,9 +68,9 @@ spage_table_init(struct hash* table){
 static void
 hash_destroy_func(struct hash_elem* e, void* aux UNUSED){
 	struct splmt_page_entry* spte = hash_entry(e,
-		                 struct splmt_page_entry*, elem);
+		                 struct splmt_page_entry, elem);
 	if (spte->loaded){
-		pagedir_clear_page(thread_current()->pagedir, spe->user_vaddr);
+		pagedir_clear_page(thread_current()->pagedir, spte->user_vaddr);
 		palloc_free_page(spte->fte->frame_addr);
 		frame_free_entry(spte->fte->frame_addr);
 	}
@@ -76,7 +81,7 @@ hash_destroy_func(struct hash_elem* e, void* aux UNUSED){
 /* Destory the page table and free the resourses. */
 void
 spage_table_destroy(struct hash* table){
-	hash_destory(table, free_spte_elem);
+	hash_destroy(table, hash_destroy_func);
 }
 
 
@@ -86,7 +91,7 @@ spage_table_destroy(struct hash* table){
 struct splmt_page_entry*
 spage_table_find_entry(struct splmt_page_entry entry){
 	struct hash_elem* e = hash_find(
-				thread_current()->spage_table, &entry.elem);
+				&(thread_current()->spage_table), &entry.elem);
 	if (e == NULL)
 		return NULL;
 	return hash_entry(e, struct splmt_page_entry, elem);
@@ -161,7 +166,7 @@ spage_table_add_file(struct file* file, int32_t offset, uint8_t* user_page,
 		zero_bytes -= page_zero;
 		user_page += PGSIZE;
 		/* Insert the entry to page table. */
-		hash_insert(&(thread_current->spage_table), spte);
+		hash_insert(&(thread_current()->spage_table), spte);
 	}
 	return true;
 }
@@ -242,7 +247,7 @@ install_file_page(struct splmt_page_entry* spte){
 
 	/* Maybe need a lock here. */
 	file_seek(spte->file, spte->offset);
-	int bytes_read = file_read(spte->file, frame_addr, spte->valid_bytes)
+	int bytes_read = file_read(spte->file, frame_addr, spte->valid_bytes);
 
 	if (bytes_read != (int)spte->valid_bytes){
 		frame_free_entry(frame_addr);
@@ -279,7 +284,7 @@ spage_table_grow_stack(void* user_vaddr){
 	if ((size_t)(PHYS_BASE - pg_round_down(user_vaddr)) > MAX_STACK_SIZE)
 	 	return false;
 	struct splmt_page_entry* spte = (struct splmt_page_entry*) malloc(
-										sizeof(splmt_page_entry));
+										sizeof(struct splmt_page_entry));
 	if (spte == NULL)
 		return false;
 	spte->attached = true;
@@ -293,7 +298,9 @@ spage_table_grow_stack(void* user_vaddr){
 		free(spte);
 		return false;
 	}
-	spte->frame_addr = frame_addr;
+	struct frame_table_entry* fte = frame_table_find(frame_addr);
+	fte->spte = spte;
+	spte->fte = fte;
 	if (!install_page(spte->user_vaddr, frame_addr, true)){
 		frame_free_entry(frame_addr);
 		free(spte);

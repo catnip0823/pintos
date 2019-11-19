@@ -27,7 +27,7 @@ swap_write_out(void* frame_addr){
 		PANIC("Swap block need to be initialized.");
 	if (swap_map == NULL)
 		PANIC("Bitmap need to be initialized.");
-	lock_acquire(&swap_lock);
+	lock_aquire(&swap_lock);
 	size_t first_free = bitmap_scan_and_flip(swap_map, 0, 1, 0);
 	if (first_free == BITMAP_ERROR)
 		PANIC("Failed to swap.");
@@ -47,7 +47,7 @@ bool
 swap_read_in(unsigned int idx, void* frame_addr){
 	if (frame_addr == NULL || swap_block == NULL || swap_map == NULL)
 		return false;
-	lock_acquire(&swap_lock);
+	lock_aquire(&swap_lock);
 	if (bitmap_test(swap_map, idx) == FREE)
 		PANIC("Swap in wrong place.");
 	bitmap_flip(swap_map, idx);
