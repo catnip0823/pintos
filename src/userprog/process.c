@@ -17,7 +17,11 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-
+// #ifdef VM
+// // alternative of vm-related functions introduced in Project 3
+// #define frame_alloc(x, y) palloc_get_page(y)
+// #define frame_free_entry(x) palloc_free_page(x)
+// #endif
 /* Static function used to create a process.*/
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void),
@@ -317,6 +321,9 @@ load (const char *file_name, void (**eip) (void),
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
+  #ifdef VM
+    t->splmt_page_table = spage_table_init();
+  #endif
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
@@ -324,8 +331,8 @@ load (const char *file_name, void (**eip) (void),
   /* Open executable file. */
   file = filesys_open (file_name);
   /* If failed to open the file. */
-  if (file == NULL)
-  	return false;
+  // if (file == NULL)
+  // 	return false;
 
   /* If the file was null*/
   if (file == NULL) {
@@ -420,7 +427,7 @@ load (const char *file_name, void (**eip) (void),
  done:
 
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  // file_close (file);
 
   return success;
 }
@@ -506,13 +513,19 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
       /* Get a page of memory. */
-      uint8_t *kpage = palloc_get_page (PAL_USER);
+      #ifdef VM
+        if (!spage_table_add_file(thread_current()->splmt_page_table, file, ofs, upage, page_read_bytes, page_zero_bytes, writable))
+          return false;
+        uint8_t *kpage = frame_alloc (upage, PAL_USER);
+      #else
+        uint8_t *kpage = palloc_get_page (PAL_USER);
+      
       if (kpage == NULL)
         return false;
 
       /* Load this page. */
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-        {
+        {          
           palloc_free_page (kpage);
           return false; 
         }
@@ -524,11 +537,15 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
           palloc_free_page (kpage);
           return false; 
         }
+      #endif
 
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
+      #ifdef VM
+        ofs += PGSIZE;
+      #endif
     }
   return true;
 }
@@ -541,7 +558,12 @@ setup_stack (void **esp, const char *whole_name)
   uint8_t *kpage;
   bool success = false;
 
-  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  #ifdef VM
+    kpage = frame_alloc (PHYS_BASE - PGSIZE, PAL_USER | PAL_ZERO);
+  #else
+    kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  #endif
+
   if (kpage != NULL) {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success){
@@ -552,6 +574,7 @@ setup_stack (void **esp, const char *whole_name)
         /* Offset PHYS_BASE as instructed. */
         *esp = PHYS_BASE;
         /* Initialize the argv. */
+        // #ifndef VM
         char* argv[512];
         char* temp_ptr;
         char* sub_str = strtok_r(whole_name, " ", &temp_ptr);
@@ -593,10 +616,16 @@ setup_stack (void **esp, const char *whole_name)
         /* Set this to be zero. */
         *esp = *esp - 4;
         *(int *)(*esp) = 0;
+        // #endif
 
     }
-      else
-        palloc_free_page (kpage);
+      else{
+        #ifdef VM
+          frame_free_entry (kpage);
+        #else
+          palloc_free_page (kpage);
+        #endif 
+      }
     }
   return success;
 }
@@ -617,6 +646,15 @@ install_page (void *upage, void *kpage, bool writable)
 
   /* Verify that there's not already a page at that virtual
      address, then map our page there. */
+  #ifndef VM
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+  #else
+    bool temp = (pagedir_get_page (t->pagedir, upage) == NULL
+          && pagedir_set_page (t->pagedir, upage, kpage, writable));
+    // shutdown_power_off();
+    // return temp;
+    return (temp && (spage_table_add_frame(t->splmt_page_table, upage, kpage)));
+  #endif
 }
+

@@ -4,7 +4,6 @@
 #include <list.h>
 
 #include "threads/synch.h"
-#include "vm/page.h"
 
 
 struct list frame_table;
@@ -13,16 +12,21 @@ struct lock frame_table_lock;
 
 struct frame_table_entry{
 	void* frame_addr;
+	void* user_addr;
 	struct thread* owner;
-	struct list_elem elem;
-	struct splmt_page_table_entry* spte;
+
+	struct list_elem lelem;
+	struct hash_elem helem;
+	struct splmt_page_entry* spte;
+
+	bool pinned;
 };
 
-void frame_init_table(void);
+void frame_init_table();
 
-// void* frame_alloc(struct splmt_page_table_entry* spte, enum palloc_flags flag);
+// void* frame_alloc(void* spte_page, enum palloc_flags flag);
 
-void frame_table_add(struct splmt_page_table_entry* spte, void* frame_addr);
+void frame_table_add(void* spte, void* frame_addr);
 
 struct frame_table_entry* frame_table_find(void* frame_addr);
 

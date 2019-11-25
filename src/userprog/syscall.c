@@ -7,6 +7,7 @@
 #include "threads/vaddr.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
+#include "lib/kernel/list.h"
 
 /* The max length of a command line. */
 #define MAX_CMD_LEN 50
@@ -40,6 +41,8 @@ int syscall_write (int fd, const void *buffer, unsigned size);
 void syscall_seek (int fd, unsigned position);
 unsigned syscall_tell (int fd);
 void syscall_close (int fd);
+int syscall_mmap(int fd, void *addr);
+void syscall_munmap(int mapping);
 
 
 /* Function to initialize the system call. */
@@ -163,8 +166,27 @@ syscall_handler (struct intr_frame *f UNUSED){
       arg1 = *((int*)f->esp+1);
       syscall_close((int)arg1);
       break;
-    default:
-  	  syscall_exit(-1);
+
+    #ifdef VM
+    case SYS_MMAP:
+      check_valid_pointer((void *)((int*)f->esp+1));
+      check_valid_pointer((void *)((int*)f->esp+2));
+      arg1 = *((int*)f->esp+1);
+      arg2 = *((int*)f->esp+2);
+      // arg2 = check_physical_pointer((void*)arg2);
+      // ASSERT(1==0);
+      
+      f->eax = syscall_mmap((int)arg1, (void*)arg2);
+      break;
+    case SYS_MUNMAP:
+      check_valid_pointer((void *)((int*)f->esp+1));
+      arg1 = *((int*)f->esp+1);
+      syscall_munmap((int)arg1);
+      break;
+
+    #endif
+
+
   }
 }
 
@@ -431,5 +453,81 @@ syscall_close (int fd){
   lock_acquire(&syscall_critical_section);
   file_close(current_file);
   thread_current()->process_files[fd-2] = NULL;
+  lock_release(&syscall_critical_section);
+}
+
+
+struct process_mmap{
+  int id;
+  struct list_elem elem;
+  struct file* file;
+  void *addr;
+  // int size;
+};
+
+int syscall_mmap(int fd, void *addr){
+
+  if (addr == NULL)
+    return -1;
+  if (fd <= 1)
+    return -1;
+  lock_acquire(&syscall_critical_section);
+  struct file *current_file = thread_current()->process_files[fd-2];
+  if ((!current_file) || file_length(current_file) == 0){
+    lock_release(&syscall_critical_section);
+    return -1;
+  }
+
+  // map
+  for (size_t i = 0; i < file_length(current_file); i+=PGSIZE){
+    if (spage_table_find_entry(thread_current()->splmt_page_table, addr + i)){
+      lock_release(&syscall_critical_section);
+      return -1;
+    }
+  }
+
+
+  for (size_t i = 0; i < file_length(current_file); i+=PGSIZE){
+    uint32_t valid_bytes = file_length(current_file) - i;
+    if (PGSIZE < valid_bytes)
+      valid_bytes = PGSIZE;
+    spage_table_add_file(thread_current()->splmt_page_table, current_file,
+                         i, addr + i, valid_bytes, PGSIZE - valid_bytes, true);
+  }
+
+  struct process_mmap *map = (struct process_mmap*)malloc(sizeof(struct process_mmap));
+  map->file = current_file;
+  map->addr = addr;
+  // map->size = file_length(current_file);
+  list_push_back(&thread_current()->list_mmap, &map->elem);
+  lock_release(&syscall_critical_section);
+  return list_entry(list_back(&thread_current()->list_mmap), struct process_mmap, elem)->id;
+}
+
+
+void syscall_munmap(int mapping){
+  struct process_mmap *map;
+  bool if_not_in_list = true;
+  return;
+
+  for (struct list_elem *item = list_begin(&thread_current()->list_mmap); item != list_end(&thread_current()->list_mmap); item = list_next(item)){
+    map = list_entry(item, struct process_mmap, elem);
+    if (mapping == map->id){
+      if_not_in_list = false;
+      break;
+    }
+  }
+  if (if_not_in_list)
+    return;
+
+  lock_acquire(&syscall_critical_section);
+  for (size_t i = 0; i < file_length(map->file); i += PGSIZE){
+    void *addr = map->addr + i;
+    uint32_t valid_bytes = file_length(map->file) - i;
+    if (PGSIZE < valid_bytes)
+      valid_bytes = PGSIZE;
+    vm_supt_mm_unmap(thread_current()->splmt_page_table, thread_current()->pagedir, addr, map->file, i, valid_bytes);
+  }
+  list_remove(&map->elem);
   lock_release(&syscall_critical_section);
 }

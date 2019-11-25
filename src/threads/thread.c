@@ -496,6 +496,7 @@ init_thread (struct thread *t, const char *name, int priority)
   sema_init(&t->child_lock, 0);
   t->check_load_success = true;
   #endif
+  list_init(&t->list_mmap);
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

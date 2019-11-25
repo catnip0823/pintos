@@ -153,7 +153,9 @@ struct thread
     struct file *this_file;
     /* proj3 */
 
-    struct hash spage_table;
+    // struct hash spage_table;
+    struct splmt_page_table *splmt_page_table;
+    struct list list_mmap;
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
