@@ -156,6 +156,7 @@ struct thread
     // struct hash spage_table;
     struct splmt_page_table *splmt_page_table;
     struct list list_mmap;
+    int esp;
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */

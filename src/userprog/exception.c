@@ -175,9 +175,11 @@ page_fault (struct intr_frame *f)
     if (!not_present) {
       goto PAGE_FAULT_VIOLATED_ACCESS;
     }
+    // void* esp = thread_current()->esp;
+    void* esp = user ? f->esp : thread_current()->esp;
 
     bool on_stack_frame, is_stack_addr;
-    on_stack_frame = (f->esp <= fault_addr || fault_addr == f->esp - 4 || fault_addr == f->esp - 32);
+    on_stack_frame = (esp <= fault_addr || fault_addr == esp - 4 || fault_addr == esp - 32);
     is_stack_addr = (PHYS_BASE - MAX_STACK_SIZE <= fault_addr && fault_addr < PHYS_BASE);
     if (on_stack_frame && is_stack_addr) {
       if (!spage_table_find_entry(thread_current()->splmt_page_table, fault_page))

@@ -9,6 +9,8 @@
 #include "filesys/filesys.h"
 #include "lib/kernel/list.h"
 
+#include "userprog/exception.h"
+
 /* The max length of a command line. */
 #define MAX_CMD_LEN 50
 
@@ -44,7 +46,8 @@ unsigned syscall_tell (int fd);
 void syscall_close (int fd);
 int syscall_mmap(int fd, void *addr);
 void syscall_munmap(int mapping);
-
+static int get_user (const uint8_t *uaddr);
+void check_buffer(void *pointer);
 
 /* Function to initialize the system call. */
 void
@@ -62,6 +65,8 @@ static void
 syscall_handler (struct intr_frame *f UNUSED){
   /* Check whether the pointer is valid. */
   check_pointer((void *)f->esp, 4);
+  
+  thread_current()->esp = f->esp;
 
   /* Varibales to represent the argument. */
 	int arg1;
@@ -136,6 +141,8 @@ syscall_handler (struct intr_frame *f UNUSED){
       arg2 = *((int*)f->esp+2);
       arg3 = *((int*)f->esp+3);
       check_vaid((void*)arg2);
+      check_buffer((void*)arg2);
+      check_buffer((void*)arg2 + arg3 - 1);
       f->eax = syscall_read((int)arg1, (void*)arg2, (unsigned int)arg3);
       break;
   	case SYS_WRITE:
@@ -248,6 +255,26 @@ check_vaid(void *pointer){
 void 
 check_pointer(void* pointer, size_t size){
   check_valid_pointer((uint8_t*)pointer + size - 1);
+}
+
+  
+
+/* Reads a byte at user virtual address UADDR.
+   UADDR must be below PHYS_BASE.
+   Returns the byte value if successful, -1 if a segfault
+   occurred. */
+static int
+get_user (const uint8_t *uaddr)
+{
+  int result;
+  asm ("movl $1f, %0; movzbl %1, %0; 1:"
+       : "=&a" (result) : "m" (*uaddr));
+  return result;
+}
+
+void check_buffer(void *pointer){
+  if (get_user(pointer) == -1)
+    syscall_exit(-1);
 }
 
 
@@ -387,9 +414,9 @@ syscall_read (int fd, void *buffer, unsigned size){
 int syscall_write (int fd, const void *buffer, unsigned size){
   /* If it is to write to console. */
 	if (fd == 1){
-		//lock_acquire(&syscall_critical_section);
+		// lock_acquire(&syscall_critical_section);
 		putbuf(buffer, size);
-		//lock_release(&syscall_critical_section);
+		// lock_release(&syscall_critical_section);
 		return size;
 	}
   /* If fd == 0, then return 0. */
