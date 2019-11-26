@@ -492,7 +492,7 @@ syscall_close (int fd){
     return;
   /* If everything is ok, then call the function. */
   /* Use a lock to deal with the synchronization. */
-  struct file *current_file = thread_current()->process_files[fd-2]; 
+  struct file *current_file = thread_current()->process_files[fd-2];
   lock_acquire(&syscall_critical_section);
   file_close(current_file);
   thread_current()->process_files[fd-2] = NULL;
@@ -505,17 +505,20 @@ struct process_mmap{
   struct list_elem elem;
   struct file* file;
   void *addr;
-  // int size;
+  int size;
 };
 
 int syscall_mmap(int fd, void *addr){
-
-  if (addr == NULL)
+  if (addr == NULL || pg_ofs(addr) != 0)
     return -1;
+
   if (fd <= 1)
     return -1;
   lock_acquire(&syscall_critical_section);
-  struct file *current_file = thread_current()->process_files[fd-2];
+  struct file *current_file;
+  if (thread_current()->process_files[fd-2])
+    current_file = file_reopen (thread_current()->process_files[fd-2]);
+
   if ((!current_file) || file_length(current_file) == 0){
     lock_release(&syscall_critical_section);
     return -1;
@@ -538,13 +541,23 @@ int syscall_mmap(int fd, void *addr){
                          i, addr + i, valid_bytes, PGSIZE - valid_bytes, true);
   }
 
+  int mid;
+
+  if (! list_empty(&thread_current()->list_mmap)) {
+    mid = list_entry(list_back(&thread_current()->list_mmap), struct process_mmap, elem)->id + 1;
+  }
+  else mid = 1;
+
   struct process_mmap *map = (struct process_mmap*)malloc(sizeof(struct process_mmap));
   map->file = current_file;
   map->addr = addr;
-  // map->size = file_length(current_file);
+  map->id = mid;
+  // printf("%d\n", mid);
+  map->size = file_length(current_file);
   list_push_back(&thread_current()->list_mmap, &map->elem);
   lock_release(&syscall_critical_section);
-  return list_entry(list_back(&thread_current()->list_mmap), struct process_mmap, elem)->id;
+
+  return mid;
 }
 
 
@@ -553,8 +566,10 @@ void syscall_munmap(int mapping){
   bool if_not_in_list = true;
   for (struct list_elem *item = list_begin(&thread_current()->list_mmap); item != list_end(&thread_current()->list_mmap); item = list_next(item)){
     map = list_entry(item, struct process_mmap, elem);
-    if (mapping == map->id)
+    if (mapping == map->id){
+      if_not_in_list = false;
       break;
+    }
   }
   if (if_not_in_list)
     return;
@@ -564,8 +579,20 @@ void syscall_munmap(int mapping){
     uint32_t valid_bytes = file_length(map->file) - i;
     if (PGSIZE < valid_bytes)
       valid_bytes = PGSIZE;
-    // vm_supt_mm_unmap(thread_current()->splmt_page_table, thread_current()->pagedir, addr, map->file, i, valid_bytes);
+    // printf("%d\n", valid_bytes);
+
+    vm_supt_mm_unmap(thread_current()->splmt_page_table, thread_current()->pagedir, addr, map->file, i, valid_bytes);
   }
   list_remove(&map->elem);
   lock_release(&syscall_critical_section);
+}
+
+void free_all(){
+  struct list *mmlist = &thread_current()->list_mmap;
+  // while (!list_empty(mmlist)) {
+    struct list_elem *e = list_begin (mmlist);
+    struct process_mmap *desc = list_entry(e, struct process_mmap, elem);
+// printf("%d\n", desc->id);
+    syscall_munmap (desc->id);
+  // }
 }

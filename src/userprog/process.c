@@ -179,6 +179,8 @@ process_exit (void){
   if (cur->pagedir && thread_current()->parent->check_load_success)
     printf("%s: exit(%d)\n", cur->name, cur->process_terminate_message);
 
+  free_all();
+
   /* Detect whether it have child. */
   int whether_have_child = 0;
   for (int i = 0; i < PROCESS_FILE_MAX; i++){

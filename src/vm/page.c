@@ -260,7 +260,65 @@ spage_table_load(struct splmt_page_table *table, uint32_t *pagedir, void *upage)
 }
 
 
+bool
+vm_supt_mm_unmap(
+    struct splmt_page_table *supt, uint32_t *pagedir,
+    void *page, struct file *f, off_t offset, size_t bytes)
+{
+	struct splmt_page_entry *spte = spage_table_find_entry(supt, page);
+  // if(spte == NULL) {
+  //   PANIC ("munmap - some page is missing; can't happen!");
+  // }
 
+  // Pin the associated frame if loaded
+  // otherwise, a page fault could occur while swapping in (reading the swap disk)
+  // if (spte->status == ON_FRAME) {
+  //   ASSERT (spte->kpage != NULL);
+  //   vm_frame_pin (spte->kpage);
+  // }
+
+  // see also, vm_load_page()
+  switch (spte->type){
+  case FRAME:
+    // ASSERT (spte->kpage != NULL);
+
+    // Dirty frame handling (write into file)
+    // Check if the upage or mapped frame is dirty. If so, write to file.
+  // printf("%d\n", offset);
+
+    file_write_at (f, spte->user_vaddr, bytes, offset);
+
+    // clear the page mapping, and release the frame
+    // vm_frame_free (spte->kpage);
+    pagedir_clear_page (pagedir, spte->user_vaddr);
+    break;
+
+  case SWAP:
+    {
+      // bool is_dirty = spte->dirty;
+      // is_dirty = is_dirty || pagedir_is_dirty(pagedir, spte->upage);
+      // if (is_dirty) {
+        // load from swap, and write back to file
+        void *tmp_page = palloc_get_page(0); // in the kernel
+        // vm_swap_in (spte->swap_index, tmp_page);
+        swap_read_in(spte->swap_idx, tmp_page);
+        file_write_at (f, tmp_page, PGSIZE, offset);
+        palloc_free_page(tmp_page);
+      // }
+      // else {
+      //   // just throw away the swap.
+      //   vm_swap_free (spte->swap_index);
+      // }
+    }
+    break;
+
+  case FILE:
+    // do nothing.
+    break;
+}
+hash_delete(&supt->splmt_pages, &spte->elem);
+return true;
+}
 
 
 
@@ -364,3 +422,5 @@ spage_table_load(struct splmt_page_table *table, uint32_t *pagedir, void *upage)
 // install_mmap_page(struct splmt_page_entry* spte){
 // 	return install_code_page(spte);
 // }
+
+
