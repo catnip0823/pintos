@@ -20,7 +20,8 @@ static void syscall_handler (struct intr_frame *);
 
 /* Function to check the validity of the pointer. */
 void check_valid_pointer(void *pointer);
-const char *check_physical_pointer(void *pointer);
+void check_vaid(void *pointer);
+void check_physical_pointer(void *pointer);
 int get_value(uint8_t * ptr);
 void check_str(char* ptr);
 void check_pointer(void* pointer, size_t size);
@@ -83,6 +84,8 @@ syscall_handler (struct intr_frame *f UNUSED){
       /* Check validity of argument. */
       check_valid_pointer((void*)((int*)f->esp + 1));
       check_valid_pointer((void*)*((int*)f->esp + 1));
+      // syscall_halt();
+
       arg1 = *((int*)f->esp+1);
   		f->eax = syscall_exec((int)arg1);
       break;
@@ -99,7 +102,7 @@ syscall_handler (struct intr_frame *f UNUSED){
       arg1 = *((int*)f->esp+1);
       arg2 = *((int*)f->esp+2);
       file = (char*)arg1;
-      file = check_physical_pointer((void*)file);
+      check_physical_pointer((void*)file);
       f->eax = syscall_create(file, (unsigned int)arg2);
   		break;
     case SYS_REMOVE:
@@ -107,7 +110,7 @@ syscall_handler (struct intr_frame *f UNUSED){
       check_valid_pointer((void*)((int*)f->esp + 1));
       arg1 = *((int*)f->esp+1);
       file = (char*)arg1;
-      file = check_physical_pointer((void*)file);
+      check_physical_pointer((void*)file);
       f->eax = syscall_remove(file);
       break;
   	case SYS_OPEN:
@@ -115,7 +118,7 @@ syscall_handler (struct intr_frame *f UNUSED){
   		check_valid_pointer((void*)((int*)f->esp + 1));
       arg1 = *((int*)f->esp+1);
       file = (char*)arg1;
-      file = check_physical_pointer((void*)file);
+      check_physical_pointer((void*)file);
       f->eax = syscall_open(file);
       break;
   	case SYS_FILESIZE:
@@ -132,7 +135,7 @@ syscall_handler (struct intr_frame *f UNUSED){
       arg1 = *((int*)f->esp+1);
       arg2 = *((int*)f->esp+2);
       arg3 = *((int*)f->esp+3);
-      arg2 = check_physical_pointer((void*)arg2);
+      check_vaid((void*)arg2);
       f->eax = syscall_read((int)arg1, (void*)arg2, (unsigned int)arg3);
       break;
   	case SYS_WRITE:
@@ -143,7 +146,7 @@ syscall_handler (struct intr_frame *f UNUSED){
 	  	arg1 = *((int*)f->esp+1);
 	  	arg2 = *((int*)f->esp+2);
 	  	arg3 = *((int*)f->esp+3);
-      arg2 = check_physical_pointer((void*)arg2);
+      check_physical_pointer((void*)arg2);
   		f->eax = syscall_write((int)arg1, (void*)arg2, (unsigned int)arg3);
   		break;
   	case SYS_SEEK:
@@ -210,7 +213,7 @@ check_valid_pointer(void *pointer){
 /* Check the validity of physical pointers, just
    like the function above, and return the char 
    pointer of the page directory */
-const char*
+void
 check_physical_pointer(void *pointer){
 	if (pointer == NULL)
 		syscall_exit(-1);
@@ -222,7 +225,20 @@ check_physical_pointer(void *pointer){
                      thread_current()->pagedir, pointer);
 	if (!ret_value)
 		syscall_exit(-1);
-	return (const char *)ret_value;
+	// return (const char *)ret_value;
+}
+
+/* Check the validity of physical pointers, just
+   like the function above, and return the char 
+   pointer of the page directory */
+void
+check_vaid(void *pointer){
+  if (pointer == NULL)
+    syscall_exit(-1);
+  if (is_user_vaddr(pointer) == false)
+    syscall_exit(-1);
+  if (is_kernel_vaddr(pointer))
+    syscall_exit(-1);
 }
 
 
@@ -508,25 +524,20 @@ int syscall_mmap(int fd, void *addr){
 void syscall_munmap(int mapping){
   struct process_mmap *map;
   bool if_not_in_list = true;
-  return;
-
   for (struct list_elem *item = list_begin(&thread_current()->list_mmap); item != list_end(&thread_current()->list_mmap); item = list_next(item)){
     map = list_entry(item, struct process_mmap, elem);
-    if (mapping == map->id){
-      if_not_in_list = false;
+    if (mapping == map->id)
       break;
-    }
   }
   if (if_not_in_list)
     return;
-
   lock_acquire(&syscall_critical_section);
   for (size_t i = 0; i < file_length(map->file); i += PGSIZE){
     void *addr = map->addr + i;
     uint32_t valid_bytes = file_length(map->file) - i;
     if (PGSIZE < valid_bytes)
       valid_bytes = PGSIZE;
-    vm_supt_mm_unmap(thread_current()->splmt_page_table, thread_current()->pagedir, addr, map->file, i, valid_bytes);
+    // vm_supt_mm_unmap(thread_current()->splmt_page_table, thread_current()->pagedir, addr, map->file, i, valid_bytes);
   }
   list_remove(&map->elem);
   lock_release(&syscall_critical_section);

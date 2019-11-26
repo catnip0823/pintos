@@ -84,18 +84,6 @@ void * frame_alloc(void* spte_page, enum palloc_flags flag){
 	if (!frame_addr)
 		frame_addr = frame_evict(flag);
 
-
-
-	/* Maybe should use while loop? */
-	
-	// if (!frame_addr){
-	// 	return;
-	// 	struct frame_table_entry* fte = frame_evict(thread_current()->pagedir);
-	// 	pagedir_clear_page(fte->owner->pagedir, fte->user_addr);
-	// 	bool is_dirty = pagedir_is_dirty(fte->owner->pagedir, fte->user_addr)
-	// 				 || pagedir_is_dirty(fte->owner->pagedir, fte->frame_addr);
-	// }
-
 	frame_table_add(spte_page, frame_addr);
 	lock_release(&frame_table_lock);
 	return frame_addr;

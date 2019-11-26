@@ -193,6 +193,7 @@ page_fault (struct intr_frame *f)
 
 
   PAGE_FAULT_VIOLATED_ACCESS:
+  // ASSERT(1==0);
 
     if(!user) { // kernel mode
       f->eip = (void *) f->eax;
