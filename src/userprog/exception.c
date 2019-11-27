@@ -170,7 +170,6 @@ page_fault (struct intr_frame *f)
   //   syscall_exit(-1);
 
 
-
     void *fault_page = (void*)pg_round_down(fault_addr);
     if (!not_present) {
       goto PAGE_FAULT_VIOLATED_ACCESS;

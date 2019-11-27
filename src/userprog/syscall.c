@@ -416,7 +416,6 @@ int syscall_write (int fd, const void *buffer, unsigned size){
   /* If it is to write to console. */
 	if (fd == 1){
 		// lock_acquire(&syscall_critical_section);
-    // printf("hhhhhhhhh\n");
 		putbuf(buffer, size);
 		// lock_release(&syscall_critical_section);
 		return size;

@@ -104,7 +104,6 @@ spage_table_add_frame (struct splmt_page_table *splmt_page_table, uint8_t *upage
   entry->user_vaddr = upage;
   entry->frame_vaddr = kpage;
   entry->type = FRAME;
-  entry->dirty = false;
   // frame_table_add(entry, kpage);
   if (hash_insert (&splmt_page_table->splmt_pages, &entry->elem) == NULL) {
     return true;
@@ -256,6 +255,7 @@ spage_table_load(struct splmt_page_table *table, uint32_t *pagedir, void *upage)
 
 	entry->frame_vaddr = new_frame_item;
 	entry->type = FRAME;
+	pagedir_set_dirty (pagedir, new_frame_item, false);
 	return true;
 }
 
@@ -279,25 +279,21 @@ vm_supt_mm_unmap(
 
   // see also, vm_load_page()
   switch (spte->type){
-  case FRAME:
+  case FRAME:{
     // ASSERT (spte->kpage != NULL);
 
-    // Dirty frame handling (write into file)
-    // Check if the upage or mapped frame is dirty. If so, write to file.
-  // printf("%d\n", offset);
-  	if (spte->dirty)
+    if (pagedir_is_dirty(pagedir, spte->user_vaddr))
     	file_write_at (f, spte->user_vaddr, bytes, offset);
 
     // clear the page mapping, and release the frame
     // vm_frame_free (spte->kpage);
     pagedir_clear_page (pagedir, spte->user_vaddr);
     break;
-
+}
   case SWAP:
     {
-      // bool is_dirty = spte->dirty;
-      // is_dirty = is_dirty || pagedir_is_dirty(pagedir, spte->upage);
-      // if (is_dirty) {
+    	// if (pagedir_is_dirty(pagedir, spte->user_vaddr))
+      // {
         // load from swap, and write back to file
         void *tmp_page = palloc_get_page(0); // in the kernel
         // vm_swap_in (spte->swap_index, tmp_page);

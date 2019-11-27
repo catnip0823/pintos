@@ -36,7 +36,6 @@ struct splmt_page_entry{
 	uint32_t offset;//
 	unsigned swap_idx;
 	
-	bool dirty;//
 	bool writable;//
 
 	bool accessed;
