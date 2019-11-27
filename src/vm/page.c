@@ -285,8 +285,8 @@ vm_supt_mm_unmap(
     // Dirty frame handling (write into file)
     // Check if the upage or mapped frame is dirty. If so, write to file.
   // printf("%d\n", offset);
-
-    file_write_at (f, spte->user_vaddr, bytes, offset);
+  	if (spte->dirty)
+    	file_write_at (f, spte->user_vaddr, bytes, offset);
 
     // clear the page mapping, and release the frame
     // vm_frame_free (spte->kpage);

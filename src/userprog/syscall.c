@@ -67,6 +67,7 @@ syscall_handler (struct intr_frame *f UNUSED){
   check_pointer((void *)f->esp, 4);
   
   thread_current()->esp = f->esp;
+  // printf("%d\n", *(int*) f->esp);
 
   /* Varibales to represent the argument. */
 	int arg1;
@@ -147,13 +148,13 @@ syscall_handler (struct intr_frame *f UNUSED){
       break;
   	case SYS_WRITE:
       /* Check validity of arguments. */
-	  	check_valid_pointer((void *)((int*)f->esp+1));
-	  	check_valid_pointer((void *)((int*)f->esp+2));
-	  	check_valid_pointer((void *)((int*)f->esp+3));
+	  	// check_valid_pointer((void *)((int*)f->esp+1));
+	  	// check_valid_pointer((void *)((int*)f->esp+2));
+	  	// check_valid_pointer((void *)((int*)f->esp+3));
 	  	arg1 = *((int*)f->esp+1);
 	  	arg2 = *((int*)f->esp+2);
 	  	arg3 = *((int*)f->esp+3);
-      check_physical_pointer((void*)arg2);
+      // check_physical_pointer((void*)arg2);
   		f->eax = syscall_write((int)arg1, (void*)arg2, (unsigned int)arg3);
   		break;
   	case SYS_SEEK:
@@ -415,6 +416,7 @@ int syscall_write (int fd, const void *buffer, unsigned size){
   /* If it is to write to console. */
 	if (fd == 1){
 		// lock_acquire(&syscall_critical_section);
+    // printf("hhhhhhhhh\n");
 		putbuf(buffer, size);
 		// lock_release(&syscall_critical_section);
 		return size;
