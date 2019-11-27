@@ -104,6 +104,7 @@ spage_table_add_frame (struct splmt_page_table *splmt_page_table, uint8_t *upage
   entry->user_vaddr = upage;
   entry->frame_vaddr = kpage;
   entry->type = FRAME;
+  entry->writable = true;
   // frame_table_add(entry, kpage);
   if (hash_insert (&splmt_page_table->splmt_pages, &entry->elem) == NULL) {
     return true;
@@ -248,9 +249,15 @@ spage_table_load(struct splmt_page_table *table, uint32_t *pagedir, void *upage)
 	if (spage_table_install_page(entry, new_frame_item) == false)
 		return false;
 
-
-	if (pagedir_set_page(pagedir, upage, new_frame_item, true) == false){
-		return false;
+	if (entry->type == FILE){
+		if (pagedir_set_page(pagedir, upage, new_frame_item, entry->writable) == false){
+			return false;
+		}
+	}
+	else{
+		if (pagedir_set_page(pagedir, upage, new_frame_item, true) == false){
+			return false;
+		}
 	}
 
 	entry->frame_vaddr = new_frame_item;
