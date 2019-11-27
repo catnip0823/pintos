@@ -158,6 +158,8 @@ spage_table_find_entry(struct splmt_page_table *entry, void* page){
 
 	struct hash_elem* e = hash_find(
 				&entry->splmt_pages, &s.elem);
+	// printf("%d\n", hash_size(&entry->splmt_pages));
+
 	if (e == NULL)
 		return NULL;
 	return hash_entry(e, struct splmt_page_entry, elem);
@@ -218,13 +220,15 @@ install_file_page(struct splmt_page_entry* spte, void *new_frame){
 bool
 spage_table_install_page(struct splmt_page_entry* spte, void *new_frame){
 	enum splmt_page_type type = spte->type;
-	if (type == FILE)
+	if (type == FILE){
 		return install_file_page(spte, new_frame);
-	if (type == SWAP)
+	}
+	if (type == SWAP){
 		swap_read_in(spte->swap_idx, new_frame);
 		spte->in_swap = false;
 		spte->loaded = true;
 		return true;
+	}
 	if (type == ZERO){
 		memset(new_frame, 0, PGSIZE);
 		return true;
@@ -236,7 +240,12 @@ spage_table_install_page(struct splmt_page_entry* spte, void *new_frame){
 
 bool
 spage_table_load(struct splmt_page_table *table, uint32_t *pagedir, void *upage){
+	// printf("%d\n",1 );
+
 	struct splmt_page_entry* entry = spage_table_find_entry(table, upage);
+	// printf("%d\n",0 );
+	// printf("%d\n",entry->type  );
+	// printf("%d\n",entry==NULL );
 	if (!entry)
 		return false;
 	if (entry->type == FRAME)

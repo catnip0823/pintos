@@ -186,7 +186,7 @@ page_fault (struct intr_frame *f)
         spage_table_add_zero (thread_current()->splmt_page_table, fault_page);
     }
 
-
+// printf("kkkkkkkkk\n");
 
     if(! spage_table_load(thread_current()->splmt_page_table, thread_current()->pagedir, fault_page) ) {
 

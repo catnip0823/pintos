@@ -130,6 +130,7 @@ start_process (void *file_name_){
    does nothing. */
 int
 process_wait (tid_t child_tid UNUSED){
+  printf("process_wait\n");
 	struct list_elem *item;
   struct struct_child *child_thread;
 
@@ -404,8 +405,11 @@ load (const char *file_name, void (**eip) (void),
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                 }
               if (!load_segment (file, file_page, (void *) mem_page,
-                                 read_bytes, zero_bytes, writable))
+                                 read_bytes, zero_bytes, writable)){
+                printf("fail load_segment\n" );
                 goto done;
+            }
+            printf("end load_segment\n" );
             }
           else
             goto done;
@@ -501,6 +505,7 @@ static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable) 
 {
+  printf("load_segment\n");
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
@@ -518,7 +523,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       #ifdef VM
         if (!spage_table_add_file(thread_current()->splmt_page_table, file, ofs, upage, page_read_bytes, page_zero_bytes, writable))
           return false;
-        uint8_t *kpage = frame_alloc (upage, PAL_USER);
+        // uint8_t *kpage = frame_alloc (upage, PAL_USER);
       #else
         uint8_t *kpage = palloc_get_page (PAL_USER);
       

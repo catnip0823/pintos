@@ -18,6 +18,12 @@ frame_init_table(){
 	list_init(&frame_table);
 }
 
+struct frame_table_entry* pick_frame_to_evict()
+{
+	struct list_elem * e = list_begin(&frame_table);
+	struct frame_table_entry * fte = list_entry(e, struct frame_table_entry, lelem);
+	return fte;
+}
 
 /*
 void*
@@ -72,35 +78,16 @@ find_entry_to_evict(){
 }*/
 
 
-/* Allocate new frame in the physical memory. If failed
-   in the first time, try to use frame eviction. Implement
-   by encapsulate palloc_get_page() in palloc.c. */
-
-/*
-void * frame_alloc(void* spte_page, enum palloc_flags flag){	
-	
-	void* frame_addr = palloc_get_page(PAL_USER | flag);
-
-	if (!frame_addr)
-		frame_addr = frame_evict(flag);
-
-	lock_acquire(&frame_table_lock);
-	frame_table_add(spte_page, frame_addr);
-	lock_release(&frame_table_lock);
-	return frame_addr;
-	
-	
-}*/
-
 void* frame_evict (enum palloc_flags flags)
 {
-  lock_acquire(&frame_table_lock);
+
+  //lock_acquire(&frame_table_lock);
   struct list_elem *e = list_begin(&frame_table);
   
   while (true)
     {
       struct frame_table_entry *fte = list_entry(e, struct frame_table_entry, lelem);
-      if (!fte->pinned && fte->spte->type != SWAP)
+      if (/*!fte->pinned &&*/ fte->spte->type != SWAP)
 	{
 	  struct thread *t = fte->owner;
 	  if (pagedir_is_accessed(t->pagedir, fte->spte->user_vaddr))
@@ -110,20 +97,9 @@ void* frame_evict (enum palloc_flags flags)
 	  else
 	    {
 	      if (pagedir_is_dirty(t->pagedir, fte->spte->user_vaddr))
-		{/*
-		  if (fte->spte->type == MMAP)
-		    {
-		      lock_acquire(&filesys_lock);
-		      file_write_at(fte->spte->file, fte->frame,
-				    fte->spte->read_bytes,
-				    fte->spte->offset);
-		      lock_release(&filesys_lock);
-		    }
-		  else
-		    {*/
+		{
 		      fte->spte->type = SWAP;
 		      fte->spte->swap_idx = swap_write_out(fte->frame_addr);
-		    //}
 		}
 	      fte->spte->loaded = false;
 	      list_remove(&fte->lelem);
@@ -142,32 +118,97 @@ void* frame_evict (enum palloc_flags flags)
 }
 
 
-void* frame_alloc (enum palloc_flags flags, struct sup_page_entry *spte)
-{
-  if ( (flags & PAL_USER) == 0 )
-    {
-      return NULL;
-    }
-  void *frame = palloc_get_page(flags);
-  if (frame)
-    {
-      frame_table_add(spte, frame);
-    }
-  else
-    {
-      while (!frame)
-	{
-	  frame = frame_evict(flags);
-	  lock_release(&frame_table_lock);
+
+
+/* Allocate new frame in the physical memory. If failed
+   in the first time, try to use frame eviction. Implement
+   by encapsulate palloc_get_page() in palloc.c. */
+
+void * frame_alloc(void* spte_page, enum palloc_flags flag){	
+	
+	void* frame_addr = palloc_get_page(PAL_USER | flag);
+
+	if (!frame_addr){
+
+printf("evict!\n");
+
+	struct frame_table_entry *f_evicted = pick_frame_to_evict();
+printf("hhhh!\n");
+    pagedir_clear_page(f_evicted->owner->pagedir, f_evicted->user_addr);
+    printf("start swap out!\n");
+    unsigned idx = swap_write_out( f_evicted->frame_addr );
+    printf("fail swap out!\n");
+    struct splmt_page_entry* spte = spage_table_find_entry(f_evicted->owner->splmt_page_table, f_evicted->user_addr);
+    spte->swap_idx = idx;
+    spte->in_swap = true;
+    spte->type = SWAP;
+    ASSERT(spte != NULL);
+    //printf("666\n");
+
+
+
+
+
+
+	palloc_free_page(f_evicted->frame_addr);
+	//printf("2333\n");
+ //    // bool is_dirty = false;
+ //    // is_dirty = is_dirty || pagedir_is_dirty(f_evicted->owner->pagedir, f_evicted->user_addr);
+ //    // is_dirty = is_dirty || pagedir_is_dirty(f_evicted->owner->pagedir, f_evicted->user_addr);
+    
+ //    // vm_supt_set_swap(f_evicted->owner->splmt_page_table, f_evicted->user_addr, swap_idx);
+ //    // vm_supt_set_dirty(f_evicted->owner->splmt_page_table, f_evicted->user_addr, is_dirty);
+ //    // vm_frame_do_free(f_evicted->frame_addr, true); // f_evicted is also invalidated
+
+    frame_addr = palloc_get_page (PAL_USER | flag);
+    ASSERT (frame_addr != NULL);
+
+
+		// frame_addr = frame_evict(flag);
+		//lock_release(&frame_table_lock);
 	}
-      if (!frame)
-	{
-	  PANIC ("Frame could not be evicted because swap is full!");
-	}
-      frame_table_add(spte, frame);
-    }
-  return frame;
+	lock_acquire(&frame_table_lock);
+	frame_table_add(spte_page, frame_addr);
+	lock_release(&frame_table_lock);
+	return frame_addr;
+	
+	
 }
+
+
+
+
+// void* frame_alloc (enum palloc_flags flags, struct sup_page_entry *spte)
+// {
+// 	//printf("Allocate frame.\n");
+// 	printf("%d\n", flags);
+// 	printf("%d\n", PAL_USER);
+// 	printf("%d\n",(flags & PAL_USER) == 0 );
+//   if ( (flags & PAL_USER) == 0 )
+//     {
+//       return NULL;
+//     }
+//   void *frame = palloc_get_page(flags);
+//   if (frame)
+//     {
+//       frame_table_add(spte, frame);
+//     }
+//   else
+//     {
+//       while (!frame)
+// 	{	
+// 	  PANIC("Need to evict\n");
+// 	  frame = frame_evict(flags);
+// 	  lock_release(&frame_table_lock);
+// 	}
+//       if (!frame)
+// 	{
+// 	  PANIC ("Frame could not be evicted because swap is full!");
+// 	}
+//       frame_table_add(spte, frame);
+//     }
+//   return frame;
+// }
 
 
 /* Add a frame to frame table, by initialize a new
@@ -176,12 +217,15 @@ void* frame_alloc (enum palloc_flags flags, struct sup_page_entry *spte)
 void
 frame_table_add(void* spte, void* frame_addr){
 	struct frame_table_entry* fte = malloc(sizeof(struct frame_table_entry));
-	if (!fte)
+	if (!fte){
 		return;
+	}
 	fte->frame_addr = frame_addr;
+	if (spte == NULL)
+		PANIC("null");
 	fte->user_addr = spte;
 	fte->owner = thread_current();
-	fte->spte = spte;
+	// fte->spte = spte;
 	list_push_back(&frame_table, &fte->lelem);
 	
 }

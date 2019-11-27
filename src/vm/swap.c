@@ -28,7 +28,7 @@ swap_write_out(void* frame_addr){
 	if (swap_map == NULL)
 		PANIC("Bitmap need to be initialized.");
 	lock_acquire(&swap_lock);
-	size_t first_free = bitmap_scan_and_flip(swap_map, 0, 1, 0);
+	size_t first_free = bitmap_scan_and_flip(swap_map, 0, 1, 1);
 	if (first_free == BITMAP_ERROR)
 		PANIC("Failed to swap.");
 	unsigned int i;
@@ -36,6 +36,7 @@ swap_write_out(void* frame_addr){
 		block_write(swap_block, first_free * SEC_NUM_PER_PAGE + i,
 			(uint8_t*)frame_addr + i * BLOCK_SECTOR_SIZE);
 	lock_release(&swap_lock);
+	// bitmap_set(swap_map, first_free, false);
 	return first_free;
 }
 
