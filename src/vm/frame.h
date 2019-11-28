@@ -16,7 +16,6 @@ struct frame_table_entry{
 	struct thread* owner;
 
 	struct list_elem lelem;
-	struct hash_elem helem;
 	struct splmt_page_entry* spte;
 
 	bool pinned;

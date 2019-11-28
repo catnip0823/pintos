@@ -5,6 +5,7 @@
 #include "userprog/pagedir.h"
 #include "vm/frame.h"
 #include "vm/page.h"
+#include "threads/vaddr.h"
 
 struct frame_table_entry*
 find_entry_to_evict();
@@ -130,35 +131,45 @@ void * frame_alloc(void* spte_page, enum palloc_flags flag){
 
 	if (!frame_addr){
 
-printf("evict!\n");
+	printf("evict!\n");
 
 	struct frame_table_entry *f_evicted = pick_frame_to_evict();
-printf("hhhh!\n");
+	// printf("hhhh!\n");
+	ASSERT(pg_ofs (f_evicted->user_addr) == 0);
     pagedir_clear_page(f_evicted->owner->pagedir, f_evicted->user_addr);
-    printf("start swap out!\n");
+    // printf("start swap out!\n");
     unsigned idx = swap_write_out( f_evicted->frame_addr );
-    printf("fail swap out!\n");
+    // printf("end swap out!\n");
     struct splmt_page_entry* spte = spage_table_find_entry(f_evicted->owner->splmt_page_table, f_evicted->user_addr);
     spte->swap_idx = idx;
     spte->in_swap = true;
     spte->type = SWAP;
     ASSERT(spte != NULL);
     //printf("666\n");
+    // list_remove(&f_evicted->lelem);
+	ASSERT (pg_ofs (f_evicted->frame_addr) == 0);
+	// palloc_free_page(f_evicted->frame_addr);
 
-
-
-
-
-
+	// palloc_free_page(f_evicted->frame_addr);
+	// printf("st\n");
+	list_remove (&f_evicted->lelem);
+	// printf("zheli \n");
+	ASSERT (pg_ofs (f_evicted->frame_addr) == 0);
+	pagedir_clear_page(f_evicted->owner->pagedir, f_evicted->user_addr);
 	palloc_free_page(f_evicted->frame_addr);
-	//printf("2333\n");
- //    // bool is_dirty = false;
- //    // is_dirty = is_dirty || pagedir_is_dirty(f_evicted->owner->pagedir, f_evicted->user_addr);
- //    // is_dirty = is_dirty || pagedir_is_dirty(f_evicted->owner->pagedir, f_evicted->user_addr);
+	
+
     
- //    // vm_supt_set_swap(f_evicted->owner->splmt_page_table, f_evicted->user_addr, swap_idx);
- //    // vm_supt_set_dirty(f_evicted->owner->splmt_page_table, f_evicted->user_addr, is_dirty);
- //    // vm_frame_do_free(f_evicted->frame_addr, true); // f_evicted is also invalidated
+    
+    // frame_addr = palloc_get_page (PAL_USER | flag);
+    printf("end evict\n");
+
+
+
+
+
+
+
 
     frame_addr = palloc_get_page (PAL_USER | flag);
     ASSERT (frame_addr != NULL);

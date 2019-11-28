@@ -224,9 +224,11 @@ spage_table_install_page(struct splmt_page_entry* spte, void *new_frame){
 		return install_file_page(spte, new_frame);
 	}
 	if (type == SWAP){
+		// printf("aaaaaaaaaaaaaaaaaaaaaaaaaaa\n");
 		swap_read_in(spte->swap_idx, new_frame);
-		spte->in_swap = false;
-		spte->loaded = true;
+		// printf("bbbbbbbbbbbbbbbbbbbbbbbbbbb\n");
+		// spte->in_swap = false;
+		// spte->loaded = true;
 		return true;
 	}
 	if (type == ZERO){
@@ -240,11 +242,11 @@ spage_table_install_page(struct splmt_page_entry* spte, void *new_frame){
 
 bool
 spage_table_load(struct splmt_page_table *table, uint32_t *pagedir, void *upage){
-	// printf("%d\n",1 );
+	// printf("start pt load\n" );
 
 	struct splmt_page_entry* entry = spage_table_find_entry(table, upage);
-	// printf("%d\n",0 );
-	// printf("%d\n",entry->type  );
+	// printf("end find entry\n",0 );
+	printf("%d\n",entry->type  );
 	// printf("%d\n",entry==NULL );
 	if (!entry)
 		return false;
@@ -272,6 +274,7 @@ spage_table_load(struct splmt_page_table *table, uint32_t *pagedir, void *upage)
 	entry->frame_vaddr = new_frame_item;
 	entry->type = FRAME;
 	pagedir_set_dirty (pagedir, new_frame_item, false);
+	printf("finish %d\n",entry->type  );
 	return true;
 }
 

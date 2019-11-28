@@ -116,10 +116,6 @@ main (void)
   syscall_init ();
 #endif
 
-#ifdef VM
-  frame_init_table();
-#endif
-
   /* Start thread scheduler and enable interrupts. */
   thread_start ();
   serial_init_queue ();
@@ -131,7 +127,10 @@ main (void)
   locate_block_devices ();
   filesys_init (format_filesys);
 #endif
-
+#ifdef VM
+  frame_init_table();
+  swap_init();
+#endif
   printf ("Boot complete.\n");
   
   /* Run actions specified on kernel command line. */
@@ -400,7 +399,6 @@ locate_block_devices (void)
   locate_block_device (BLOCK_SCRATCH, scratch_bdev_name);
 #ifdef VM
   locate_block_device (BLOCK_SWAP, swap_bdev_name);
-  swap_init();
 #endif
 }
 
