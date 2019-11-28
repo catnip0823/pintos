@@ -67,7 +67,7 @@ syscall_handler (struct intr_frame *f UNUSED){
   check_pointer((void *)f->esp, 4);
   
   thread_current()->esp = f->esp;
-  printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!syscall call%d\n", *(int*) f->esp);
+  // printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!syscall call%d\n", *(int*) f->esp);
 
   /* Varibales to represent the argument. */
 	int arg1;

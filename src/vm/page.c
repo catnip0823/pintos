@@ -246,14 +246,14 @@ spage_table_load(struct splmt_page_table *table, uint32_t *pagedir, void *upage)
 
 	struct splmt_page_entry* entry = spage_table_find_entry(table, upage);
 	// printf("end find entry\n",0 );
-	printf("%d\n",entry->type  );
+	// printf("%d\n",entry->type  );
 	// printf("%d\n",entry==NULL );
 	if (!entry)
 		return false;
 	if (entry->type == FRAME)
 		return true;
 
-	void *new_frame_item = frame_alloc(PAL_USER, upage);
+	void *new_frame_item = frame_alloc(upage, PAL_USER);
 	if (!new_frame_item)
 		return false;
 
@@ -274,7 +274,7 @@ spage_table_load(struct splmt_page_table *table, uint32_t *pagedir, void *upage)
 	entry->frame_vaddr = new_frame_item;
 	entry->type = FRAME;
 	pagedir_set_dirty (pagedir, new_frame_item, false);
-	printf("finish %d\n",entry->type  );
+	// printf("finish %d\n",entry->type  );
 	return true;
 }
 

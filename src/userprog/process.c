@@ -130,7 +130,7 @@ start_process (void *file_name_){
    does nothing. */
 int
 process_wait (tid_t child_tid UNUSED){
-  printf("process_wait\n");
+  // printf("process_wait\n");
 	struct list_elem *item;
   struct struct_child *child_thread;
 
@@ -406,10 +406,10 @@ load (const char *file_name, void (**eip) (void),
                 }
               if (!load_segment (file, file_page, (void *) mem_page,
                                  read_bytes, zero_bytes, writable)){
-                printf("fail load_segment\n" );
+                // printf("fail load_segment\n" );
                 goto done;
             }
-            printf("end load_segment\n" );
+            // printf("end load_segment\n" );
             }
           else
             goto done;
@@ -505,7 +505,7 @@ static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable) 
 {
-  printf("load_segment\n");
+  // printf("load_segment\n");
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);

@@ -25,7 +25,7 @@ void frame_init_table();
 
 // void* frame_alloc(void* spte_page, enum palloc_flags flag);
 
-void frame_table_add(void* spte, void* frame_addr);
+void frame_table_add(void* user_addr, void* frame_addr);
 
 struct frame_table_entry* frame_table_find(void* frame_addr);
 

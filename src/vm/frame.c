@@ -125,13 +125,13 @@ void* frame_evict (enum palloc_flags flags)
    in the first time, try to use frame eviction. Implement
    by encapsulate palloc_get_page() in palloc.c. */
 
-void * frame_alloc(void* spte_page, enum palloc_flags flag){	
+void * frame_alloc(void* user_addr, enum palloc_flags flag){	
 	
 	void* frame_addr = palloc_get_page(PAL_USER | flag);
 
 	if (!frame_addr){
 
-	printf("evict!\n");
+	// printf("evict!\n");
 
 	struct frame_table_entry *f_evicted = pick_frame_to_evict();
 	// printf("hhhh!\n");
@@ -162,7 +162,7 @@ void * frame_alloc(void* spte_page, enum palloc_flags flag){
     
     
     // frame_addr = palloc_get_page (PAL_USER | flag);
-    printf("end evict\n");
+    // printf("end evict\n");
 
 
 
@@ -179,7 +179,7 @@ void * frame_alloc(void* spte_page, enum palloc_flags flag){
 		//lock_release(&frame_table_lock);
 	}
 	lock_acquire(&frame_table_lock);
-	frame_table_add(spte_page, frame_addr);
+	frame_table_add(user_addr, frame_addr);
 	lock_release(&frame_table_lock);
 	return frame_addr;
 	
@@ -226,15 +226,15 @@ void * frame_alloc(void* spte_page, enum palloc_flags flag){
    frame table entry, and set the member varable, 
    push it into the list of frame table. */
 void
-frame_table_add(void* spte, void* frame_addr){
+frame_table_add(void* user_addr, void* frame_addr){
 	struct frame_table_entry* fte = malloc(sizeof(struct frame_table_entry));
 	if (!fte){
 		return;
 	}
 	fte->frame_addr = frame_addr;
-	if (spte == NULL)
+	if (user_addr == NULL)
 		PANIC("null");
-	fte->user_addr = spte;
+	fte->user_addr = user_addr;
 	fte->owner = thread_current();
 	// fte->spte = spte;
 	list_push_back(&frame_table, &fte->lelem);
