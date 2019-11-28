@@ -3,7 +3,7 @@
 /* Initialize  the swap block. */
 bool
 swap_init(){
-	lock_init(&swap_lock);
+	// lock_init(&swap_lock);
     swap_block = block_get_role(BLOCK_SWAP);
 	if (swap_block == NULL)
 		return false;
@@ -27,15 +27,15 @@ swap_write_out(void* frame_addr){
 	// 	PANIC("Swap block need to be initialized.");
 	// if (swap_map == NULL)
 	// 	PANIC("Bitmap need to be initialized.");
-	// lock_acquire(&swap_lock);
+
 	size_t first_free = bitmap_scan_and_flip(swap_map, 0, 1, 1);
 	// if (first_free == BITMAP_ERROR)
-	// 	PANIC("Failed to swap.");
+
 	unsigned int i;
 	for (i = 0; i < SEC_NUM_PER_PAGE; i++)
 		block_write(swap_block, first_free * SEC_NUM_PER_PAGE + i,
 			(uint8_t*)frame_addr + i * BLOCK_SECTOR_SIZE);
-	// lock_release(&swap_lock);
+	// printf("swap out %d\n", first_free);
 	// bitmap_set(swap_map, first_free, false);
 	return first_free;
 }
@@ -46,9 +46,9 @@ swap_write_out(void* frame_addr){
    it succeed to do so. */
 bool
 swap_read_in(unsigned int idx, void* frame_addr){
+	// printf("swap in\n");
 	if (frame_addr == NULL || swap_block == NULL || swap_map == NULL)
 		return false;
-	// lock_acquire(&swap_lock);
 	if (bitmap_test(swap_map, idx) == true)
 		PANIC("Swap in wrong place.");
 	// bitmap_flip(swap_map, idx);
@@ -56,7 +56,6 @@ swap_read_in(unsigned int idx, void* frame_addr){
 	for (i = 0; i < SEC_NUM_PER_PAGE; i++)
 		block_read(swap_block, idx*SEC_NUM_PER_PAGE+i,
 						(uint8_t*)frame_addr + i*BLOCK_SECTOR_SIZE);
-	// lock_release(&swap_lock);
 	bitmap_set(swap_map, idx, true);
 	return true;
 }

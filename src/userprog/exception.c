@@ -182,6 +182,7 @@ page_fault (struct intr_frame *f)
     on_stack_frame = (esp <= fault_addr || fault_addr == esp - 4 || fault_addr == esp - 32);
     is_stack_addr = (PHYS_BASE - MAX_STACK_SIZE <= fault_addr && fault_addr < PHYS_BASE);
     if (on_stack_frame && is_stack_addr) {
+
       if (!spage_table_find_entry(thread_current()->splmt_page_table, fault_page))
         spage_table_add_zero (thread_current()->splmt_page_table, fault_page);
     }
@@ -189,7 +190,7 @@ page_fault (struct intr_frame *f)
 // printf("kkkkkkkkk\n");
 
     if(! spage_table_load(thread_current()->splmt_page_table, thread_current()->pagedir, fault_page) ) {
-
+// printf("page??????????????????????????????\n");
       goto PAGE_FAULT_VIOLATED_ACCESS;
     }
     return;
@@ -204,8 +205,10 @@ page_fault (struct intr_frame *f)
       thread_current()->process_terminate_message = -1;
       thread_exit (); 
     }
+    
+    // thread_current()->process_terminate_message = -1;
+    // thread_exit (); 
     kill(f);
-
 
 return;
 }

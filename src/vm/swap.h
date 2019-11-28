@@ -17,7 +17,7 @@ enum swap_status
 
 struct block* swap_block;
 struct bitmap* swap_map;
-struct lock swap_lock;
+// struct lock swap_lock;
 
 // void swap_init();
 unsigned swap_write_out(void* frame_addr);

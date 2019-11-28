@@ -15,21 +15,19 @@ find_entry_to_evict();
    in the frame table operation. */
 void 
 frame_init_table(){
-	lock_init(&frame_table_lock);
 	list_init(&frame_table);
 }
 
-struct frame_table_entry* pick_frame_to_evict()
-{
-	struct list_elem * e = list_begin(&frame_table);
-	struct frame_table_entry * fte = list_entry(e, struct frame_table_entry, lelem);
-	return fte;
-}
+// struct frame_table_entry* pick_frame_to_evict()
+// {
+// 	struct list_elem * e = list_begin(&frame_table);
+// 	struct frame_table_entry * fte = list_entry(e, struct frame_table_entry, lelem);
+// 	return fte;
+// }
 
 /*
 void*
 frame_evict(enum palloc_flags flags){
-	//lock_acquire(&frame_table_lock);
 	struct list_elem * e = list_begin(&frame_table);
 
 	struct frame_table_entry * fte = find_entry_to_evict();
@@ -51,21 +49,28 @@ frame_evict(enum palloc_flags flags){
 /* Find a frame to evict in the frame table, using clock
    algorithm. Return the pointer to the frame table entry
    to evict. Panic if not able to find the frame. */
-/*struct frame_table_entry*
-find_entry_to_evict(){
-	lock_acquire(&frame_table_lock);
+struct frame_table_entry*
+pick_frame_to_evict(){
 	struct list_elem * e = list_begin(&frame_table);
-	struct thread* t = thread_current();
+	
 	int iter = 0;
 	while(1){
 		struct frame_table_entry * fte = list_entry(e, struct frame_table_entry, lelem);
-		if (fte->pinned == false){
-			if (pagedir_is_accessed(t->pagedir, fte->spte->user_vaddr)){
-				pagedir_set_accessed(t->pagedir, fte->spte->user_vaddr, false);
-			} else {
+		struct thread* t = fte->owner;
+		// if (fte->pinned == false){
+			if (pagedir_is_accessed(t->pagedir, fte->user_addr)){
+				// printf("jinqulehhhhhhhhh\n");
+				pagedir_set_accessed(t->pagedir, fte->user_addr, false);
+				// e = list_next(e);
+				// continue;
+			} else{
 				return fte;
 			}
-		}
+
+				// printf("zzzzzzzzzz\n");
+				// return fte;
+			
+		// }
 		e = list_next(e);
 		if (e == list_end(&frame_table)){
 			e = list_begin(&frame_table);
@@ -76,13 +81,12 @@ find_entry_to_evict(){
 			PANIC("Can not find frame to evict.");
 		}
 	}
-}*/
+}
 
 
 void* frame_evict (enum palloc_flags flags)
 {
 
-  //lock_acquire(&frame_table_lock);
   struct list_elem *e = list_begin(&frame_table);
   
   while (true)
@@ -138,6 +142,8 @@ void * frame_alloc(void* user_addr, enum palloc_flags flag){
 	ASSERT(pg_ofs (f_evicted->user_addr) == 0);
     pagedir_clear_page(f_evicted->owner->pagedir, f_evicted->user_addr);
     // printf("start swap out!\n");
+    // if (!lock_try_acquire (&f_evicted->frame_entry_lock))
+    // 	continue;
     unsigned idx = swap_write_out( f_evicted->frame_addr );
     // printf("end swap out!\n");
     struct splmt_page_entry* spte = spage_table_find_entry(f_evicted->owner->splmt_page_table, f_evicted->user_addr);
@@ -157,30 +163,20 @@ void * frame_alloc(void* user_addr, enum palloc_flags flag){
 	ASSERT (pg_ofs (f_evicted->frame_addr) == 0);
 	pagedir_clear_page(f_evicted->owner->pagedir, f_evicted->user_addr);
 	palloc_free_page(f_evicted->frame_addr);
-	
-
-    
-    
+	// lock_release(&f->frame_entry_lock);
     // frame_addr = palloc_get_page (PAL_USER | flag);
     // printf("end evict\n");
 
-
-
-
-
-
-
-
     frame_addr = palloc_get_page (PAL_USER | flag);
-    ASSERT (frame_addr != NULL);
+    // ASSERT (frame_addr != NULL);
 
 
 		// frame_addr = frame_evict(flag);
-		//lock_release(&frame_table_lock);
 	}
-	lock_acquire(&frame_table_lock);
+	// if (!lock_try_acquire (&f->frame_entry_lock))
+	// 	continue;
 	frame_table_add(user_addr, frame_addr);
-	lock_release(&frame_table_lock);
+	// lock_release(&f->frame_entry_lock);
 	return frame_addr;
 	
 	
@@ -210,7 +206,6 @@ void * frame_alloc(void* user_addr, enum palloc_flags flag){
 // 	{	
 // 	  PANIC("Need to evict\n");
 // 	  frame = frame_evict(flags);
-// 	  lock_release(&frame_table_lock);
 // 	}
 //       if (!frame)
 // 	{
@@ -232,6 +227,7 @@ frame_table_add(void* user_addr, void* frame_addr){
 		return;
 	}
 	fte->frame_addr = frame_addr;
+	// lock_init (&fte->frame_entry_lock);
 	if (user_addr == NULL)
 		PANIC("null");
 	fte->user_addr = user_addr;
@@ -268,7 +264,6 @@ frame_table_find(void* frame_addr){
    and free the memory of entry and page. */
 void
 frame_free_entry(void* frame_addr){
-	lock_acquire(&frame_table_lock);
 	struct frame_table_entry* entry = frame_table_find(frame_addr);
 	if (entry == NULL)
 		PANIC("Invalid frame_addr to free.");
@@ -276,5 +271,4 @@ frame_free_entry(void* frame_addr){
 	list_remove(&(entry->lelem));
 	palloc_free_page(frame_addr);
 
-	lock_release(&frame_table_lock);
 }

@@ -246,7 +246,7 @@ spage_table_load(struct splmt_page_table *table, uint32_t *pagedir, void *upage)
 
 	struct splmt_page_entry* entry = spage_table_find_entry(table, upage);
 	// printf("end find entry\n",0 );
-	// printf("%d\n",entry->type  );
+	// printf("entry type %d\n",entry->type  );
 	// printf("%d\n",entry==NULL );
 	if (!entry)
 		return false;

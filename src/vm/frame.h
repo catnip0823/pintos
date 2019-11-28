@@ -8,12 +8,12 @@
 
 struct list frame_table;
 
-struct lock frame_table_lock;
 
 struct frame_table_entry{
 	void* frame_addr;
 	void* user_addr;
 	struct thread* owner;
+	struct lock frame_entry_lock;
 
 	struct list_elem lelem;
 	struct splmt_page_entry* spte;
