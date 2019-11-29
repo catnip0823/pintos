@@ -286,20 +286,10 @@ vm_supt_mm_unmap(
     void *page, struct file *f, off_t offset, size_t bytes)
 {
 	struct splmt_page_entry *spte = spage_table_find_entry(supt, page);
-  // if(spte == NULL) {
-  //   PANIC ("munmap - some page is missing; can't happen!");
-  // }
-
-  // Pin the associated frame if loaded
-  // otherwise, a page fault could occur while swapping in (reading the swap disk)
-  // if (spte->status == ON_FRAME) {
-  //   ASSERT (spte->kpage != NULL);
-  //   vm_frame_pin (spte->kpage);
-  // }
 
   // see also, vm_load_page()
   switch (spte->type){
-  case FRAME:{
+  case FRAME:
     // ASSERT (spte->kpage != NULL);
 
     if (pagedir_is_dirty(pagedir, spte->user_vaddr))
@@ -309,27 +299,18 @@ vm_supt_mm_unmap(
     // vm_frame_free (spte->kpage);
     pagedir_clear_page (pagedir, spte->user_vaddr);
     break;
-}
+
   case SWAP:
     {
-    	// if (pagedir_is_dirty(pagedir, spte->user_vaddr))
-      // {
-        // load from swap, and write back to file
-        void *tmp_page = palloc_get_page(0); // in the kernel
-        // vm_swap_in (spte->swap_index, tmp_page);
+        void *tmp_page = palloc_get_page(0);
         swap_read_in(spte->swap_idx, tmp_page);
         file_write_at (f, tmp_page, PGSIZE, offset);
         palloc_free_page(tmp_page);
-      // }
-      // else {
-      //   // just throw away the swap.
-      //   vm_swap_free (spte->swap_index);
-      // }
+
     }
     break;
 
   case FILE:
-    // do nothing.
     break;
 }
 hash_delete(&supt->splmt_pages, &spte->elem);
@@ -337,106 +318,15 @@ return true;
 }
 
 
-
-
-
-
-
-
-// /* Grow stack when necessary, return whether it succeed. */
-// bool
-// spage_table_grow_stack(void* user_vaddr){
-// 	if ((size_t)(PHYS_BASE - pg_round_down(user_vaddr)) > MAX_STACK_SIZE)
-// 	 	return false;
-// 	struct splmt_page_entry* spte = (struct splmt_page_entry*) malloc(
-// 										sizeof(struct splmt_page_entry));
-// 	if (spte == NULL)
-// 		return false;
-// 	spte->attached = true;
-// 	spte->writable = true;
-// 	spte->loaded = true;
-// 	spte->user_vaddr = pg_round_down(user_vaddr);
-// 	spte->type = CODE;
-
-// 	uint8_t* frame_addr = frame_alloc(spte, PAL_USER);
-// 	if (frame_addr == NULL){
-// 		free(spte);
-// 		return false;
-// 	}
-// 	struct frame_table_entry* fte = frame_table_find(frame_addr);
-// 	fte->page_addr = spte;
-// 	spte->fte = fte;
-// 	if (!install_page(spte->user_vaddr, frame_addr, true)){
-// 		frame_free_entry(frame_addr);
-// 		free(spte);
-// 		return false;
-// 	}
-// 	hash_insert(&(thread_current()->spage_table), spte);
-// 	return true;
-// }
-
-// /* Function for add new entry to page table, with type
-//    MMAP, return a pointer to the first entry it added.
-//    Return NULL pointer if failed to allcate memory. */
-// struct splmt_page_entry*
-// spage_table_add_mmap(struct file *file, uint32_t valid_bytes, void *user_page){
-// 	int page_num = valid_bytes/PGSIZE + 1;
-// 	struct splmt_page_entry* retval;
-// 	for (int i = 0; i < page_num; ++i){
-// 		struct splmt_page_entry* test = spage_table_find_addr(user_page);
-// 		if (test != NULL)
-// 			return NULL;
-
-// 		int last_page = (i == page_num);
-// 		unsigned page_valid = last_page == 1 ? valid_bytes%PGSIZE : PGSIZE;
-// 		unsigned page_zero = PGSIZE - page_valid;
-// 		unsigned offset = i*PGSIZE;
-
-// 		struct splmt_page_entry* spte = creat_entry();
-// 		spte->valid_bytes = page_valid;
-// 		spte->zero_bytes = page_zero;
-// 		spte->user_vaddr = user_page;
-// 		spte->offset = offset;
-// 		spte->writable = true;
-// 		spte->type = MMAP;
-// 		spte->file = file;
-
-// 		user_page += PGSIZE;
-
-// 		hash_insert(&(thread_current()->spage_table), spte);
-// 		if (i == 0)
-// 			retval = spte;
-// 	}
-// 	return retval;
-// }
-
-
-// /* Install and load the page with type CODE, return whether 
-//    it succeed to install the page. */
-// static bool
-// install_code_page(struct splmt_page_entry* spte){
-// 	if (spte == NULL)
-// 		return false;
-// 	void* frame_addr = frame_alloc(spte, PAL_USER | PAL_ZERO);
-// 	if (frame_addr == NULL)
-// 		return NULL;
-// 	if (install_page(spte->user_vaddr, frame_addr, true)){
-// 		spte->fte = frame_table_find(frame_addr);
-// 		if(spte->in_swap)
-// 			return false;
-// 		return true;
-// 	}
-// 	frame_free_entry(frame_addr);
-// 	return false;
-// }
-
-
-// /* The page with type MMAP have generally same
-//    procedure with type CODE, so just called the
-//    function we defined above. */
-// static bool
-// install_mmap_page(struct splmt_page_entry* spte){
-// 	return install_code_page(spte);
-// }
-
-
+void check_and_setup_stack(bool is_user, struct intr_frame *f, void *fault_addr){
+	void *temp_sp = f->esp;
+	void *fault_page = (void*)pg_round_down(fault_addr);
+	if (!is_user)
+		temp_sp = thread_current()->esp;
+	if (fault_addr > PHYS_BASE - MAX_STACK_SIZE && fault_addr < PHYS_BASE){
+		if (temp_sp <= fault_addr || fault_addr + 4 == temp_sp || fault_addr + 32 == temp_sp){
+			if (!spage_table_find_entry(thread_current()->splmt_page_table, fault_page))
+				spage_table_add_zero (thread_current()->splmt_page_table, fault_page);
+		}
+	}
+}

@@ -171,46 +171,22 @@ page_fault (struct intr_frame *f)
 
 
 
-    void *fault_page = (void*)pg_round_down(fault_addr);
-    if (!not_present) {
-      goto PAGE_FAULT_VIOLATED_ACCESS;
-    }
-    // void* esp = thread_current()->esp;
-    void* esp = user ? f->esp : thread_current()->esp;
-
-    bool on_stack_frame, is_stack_addr;
-    on_stack_frame = (esp <= fault_addr || fault_addr == esp - 4 || fault_addr == esp - 32);
-    is_stack_addr = (PHYS_BASE - MAX_STACK_SIZE <= fault_addr && fault_addr < PHYS_BASE);
-    if (on_stack_frame && is_stack_addr) {
-
-      if (!spage_table_find_entry(thread_current()->splmt_page_table, fault_page))
-        spage_table_add_zero (thread_current()->splmt_page_table, fault_page);
-    }
-
-// printf("kkkkkkkkk\n");
-
-    if(spage_table_load(thread_current()->splmt_page_table, thread_current()->pagedir, fault_page) == false) {
-// printf("page load fail............\n");
-      thread_current()->process_terminate_message = -1;
-      thread_exit();
-      goto PAGE_FAULT_VIOLATED_ACCESS;
-    }
-    return;
-
-
-  PAGE_FAULT_VIOLATED_ACCESS:
-  // ASSERT(1==0);
-
-    if(!user) { // kernel mode
-      f->eip = (void *) f->eax;
-      f->eax = 0xffffffff;
+  void *fault_page = (void*)pg_round_down(fault_addr);
+  if (!not_present && user) {
+    kill(f);
+  }
+  if (!not_present){
+    if (user)
+      kill(f);
+    else{
       thread_current()->process_terminate_message = -1;
       thread_exit (); 
     }
-    
-    // thread_current()->process_terminate_message = -1;
-    // thread_exit (); 
-    kill(f);
-
-return;
+  }
+  check_and_setup_stack(user, f, fault_addr);
+  if(!spage_table_load(thread_current()->splmt_page_table, thread_current()->pagedir, fault_page)) {
+    thread_current()->process_terminate_message = -1;
+    thread_exit();
+  }
+  return;
 }
