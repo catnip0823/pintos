@@ -65,9 +65,7 @@ static void
 syscall_handler (struct intr_frame *f UNUSED){
   /* Check whether the pointer is valid. */
   check_pointer((void *)f->esp, 4);
-  
   thread_current()->esp = f->esp;
-  // printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!syscall call%d\n", *(int*) f->esp);
 
   /* Varibales to represent the argument. */
 	int arg1;
@@ -147,10 +145,6 @@ syscall_handler (struct intr_frame *f UNUSED){
       f->eax = syscall_read((int)arg1, (void*)arg2, (unsigned int)arg3);
       break;
   	case SYS_WRITE:
-      /* Check validity of arguments. */
-	  	// check_valid_pointer((void *)((int*)f->esp+1));
-	  	// check_valid_pointer((void *)((int*)f->esp+2));
-	  	// check_valid_pointer((void *)((int*)f->esp+3));
 	  	arg1 = *((int*)f->esp+1);
 	  	arg2 = *((int*)f->esp+2);
 	  	arg3 = *((int*)f->esp+3);
@@ -183,10 +177,7 @@ syscall_handler (struct intr_frame *f UNUSED){
       check_valid_pointer((void *)((int*)f->esp+1));
       check_valid_pointer((void *)((int*)f->esp+2));
       arg1 = *((int*)f->esp+1);
-      arg2 = *((int*)f->esp+2);
-      // arg2 = check_physical_pointer((void*)arg2);
-      // ASSERT(1==0);
-      
+      arg2 = *((int*)f->esp+2);      
       f->eax = syscall_mmap((int)arg1, (void*)arg2);
       break;
     case SYS_MUNMAP:
@@ -502,11 +493,10 @@ syscall_close (int fd){
 
 
 struct process_mmap{
-  int id;
   struct list_elem elem;
   struct file* file;
   void *addr;
-  int size;
+  int id;
 };
 
 int syscall_mmap(int fd, void *addr){
@@ -542,23 +532,20 @@ int syscall_mmap(int fd, void *addr){
                          i, addr + i, valid_bytes, PGSIZE - valid_bytes, true);
   }
 
-  int mid;
-
-  if (! list_empty(&thread_current()->list_mmap)) {
-    mid = list_entry(list_back(&thread_current()->list_mmap), struct process_mmap, elem)->id + 1;
-  }
-  else mid = 1;
+  int return_val;
+  if (list_empty(&thread_current()->list_mmap))
+    return_val = 1;
+  else
+    return_val = list_entry(list_back(&thread_current()->list_mmap), struct process_mmap, elem)->id + 1;
 
   struct process_mmap *map = (struct process_mmap*)malloc(sizeof(struct process_mmap));
   map->file = current_file;
   map->addr = addr;
-  map->id = mid;
-  // printf("%d\n", mid);
-  map->size = file_length(current_file);
+  map->id = return_val;
   list_push_back(&thread_current()->list_mmap, &map->elem);
   lock_release(&syscall_critical_section);
 
-  return mid;
+  return return_val;
 }
 
 
@@ -580,20 +567,16 @@ void syscall_munmap(int mapping){
     uint32_t valid_bytes = file_length(map->file) - i;
     if (PGSIZE < valid_bytes)
       valid_bytes = PGSIZE;
-    // printf("%d\n", valid_bytes);
-
-    vm_supt_mm_unmap(thread_current()->splmt_page_table, thread_current()->pagedir, addr, map->file, i, valid_bytes);
+    spage_munmap(thread_current(), map->file, addr, i, valid_bytes);
   }
   list_remove(&map->elem);
   lock_release(&syscall_critical_section);
 }
 
+
 void free_all(){
   struct list *mmlist = &thread_current()->list_mmap;
-  // while (!list_empty(mmlist)) {
-    struct list_elem *e = list_begin (mmlist);
-    struct process_mmap *desc = list_entry(e, struct process_mmap, elem);
-// printf("%d\n", desc->id);
-    syscall_munmap (desc->id);
-  // }
+  struct list_elem *e = list_begin (mmlist);
+  struct process_mmap *desc = list_entry(e, struct process_mmap, elem);
+  syscall_munmap (desc->id);
 }

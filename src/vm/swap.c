@@ -1,17 +1,15 @@
 #include "vm/swap.h"
 #include "threads/synch.h"
 /* Initialize  the swap block. */
-bool
+void
 swap_init(){
-	// lock_init(&swap_lock);
     swap_block = block_get_role(BLOCK_SWAP);
 	if (swap_block == NULL)
-		return false;
+		return;
 	swap_map = bitmap_create(block_size(swap_block) / SEC_NUM_PER_PAGE);
 	if (swap_map == NULL)
-		return false;
+		return;
 	bitmap_set_all(swap_map, true);
-	return true;
 }
 
 
@@ -21,22 +19,10 @@ swap_init(){
    Return the */
 unsigned int
 swap_write_out(void* frame_addr){
-	// if (frame_addr == NULL)
-	// 	PANIC("Invalid addr for swap.");
-	// if (swap_block == NULL)
-	// 	PANIC("Swap block need to be initialized.");
-	// if (swap_map == NULL)
-	// 	PANIC("Bitmap need to be initialized.");
-
 	size_t first_free = bitmap_scan_and_flip(swap_map, 0, 1, 1);
-	// if (first_free == BITMAP_ERROR)
-
-	unsigned int i;
-	for (i = 0; i < SEC_NUM_PER_PAGE; i++)
+	for (unsigned int i = 0; i < SEC_NUM_PER_PAGE; i++)
 		block_write(swap_block, first_free * SEC_NUM_PER_PAGE + i,
-			(uint8_t*)frame_addr + i * BLOCK_SECTOR_SIZE);
-	// printf("swap out %d\n", first_free);
-	// bitmap_set(swap_map, first_free, false);
+			frame_addr + i * BLOCK_SECTOR_SIZE);
 	return first_free;
 }
 
@@ -44,18 +30,11 @@ swap_write_out(void* frame_addr){
 /* Read the data in the swap partition back to frame
    address. Return a boolean value indicate whether 
    it succeed to do so. */
-bool
+void
 swap_read_in(unsigned int idx, void* frame_addr){
-	// printf("swap in %d!\n", idx);
-	// if (frame_addr == NULL || swap_block == NULL || swap_map == NULL)
-		// return false;
-	// if (bitmap_test(swap_map, idx) == true)
-		// PANIC("Swap in wrong place.");
-	// bitmap_flip(swap_map, idx);
-	unsigned int i;
-	for (i = 0; i < SEC_NUM_PER_PAGE; i++)
+	for (unsigned int i = 0; i < SEC_NUM_PER_PAGE; i++)
 		block_read(swap_block, idx*SEC_NUM_PER_PAGE+i,
-						(uint8_t*)frame_addr + i*BLOCK_SECTOR_SIZE);
+						frame_addr + i*BLOCK_SECTOR_SIZE);
 	bitmap_set(swap_map, idx, true);
 	return true;
 }

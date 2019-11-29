@@ -17,11 +17,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-// #ifdef VM
-// // alternative of vm-related functions introduced in Project 3
-// #define frame_alloc(x, y) palloc_get_page(y)
-// #define frame_free_entry(x) palloc_free_page(x)
-// #endif
+
 /* Static function used to create a process.*/
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void),
@@ -130,7 +126,6 @@ start_process (void *file_name_){
    does nothing. */
 int
 process_wait (tid_t child_tid UNUSED){
-  // printf("process_wait\n");
 	struct list_elem *item;
   struct struct_child *child_thread;
 
@@ -334,8 +329,6 @@ load (const char *file_name, void (**eip) (void),
   /* Open executable file. */
   file = filesys_open (file_name);
   /* If failed to open the file. */
-  // if (file == NULL)
-  // 	return false;
 
   /* If the file was null*/
   if (file == NULL) {
@@ -406,10 +399,8 @@ load (const char *file_name, void (**eip) (void),
                 }
               if (!load_segment (file, file_page, (void *) mem_page,
                                  read_bytes, zero_bytes, writable)){
-                // printf("fail load_segment\n" );
                 goto done;
             }
-            // printf("end load_segment\n" );
             }
           else
             goto done;
@@ -505,7 +496,6 @@ static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable) 
 {
-  // printf("load_segment\n");
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
@@ -523,7 +513,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       #ifdef VM
         if (!spage_table_add_file(thread_current()->splmt_page_table, file, ofs, upage, page_read_bytes, page_zero_bytes, writable))
           return false;
-        // uint8_t *kpage = frame_alloc (upage, PAL_USER);
       #else
         uint8_t *kpage = palloc_get_page (PAL_USER);
       
@@ -581,7 +570,6 @@ setup_stack (void **esp, const char *whole_name)
         /* Offset PHYS_BASE as instructed. */
         *esp = PHYS_BASE;
         /* Initialize the argv. */
-        // #ifndef VM
         char* argv[512];
         char* temp_ptr;
         char* sub_str = strtok_r(whole_name, " ", &temp_ptr);
@@ -659,8 +647,6 @@ install_page (void *upage, void *kpage, bool writable)
   #else
     bool temp = (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
-    // shutdown_power_off();
-    // return temp;
     return (temp && (spage_table_add_frame(t->splmt_page_table, upage, kpage)));
   #endif
 }
