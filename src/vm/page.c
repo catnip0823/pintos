@@ -259,7 +259,7 @@ spage_table_load(struct splmt_page_table *table, uint32_t *pagedir, void *upage)
 
 	if (spage_table_install_page(entry, new_frame_item) == false)
 		return false;
-
+// printf("seco\n");
 	if (entry->type == FILE){
 		if (pagedir_set_page(pagedir, upage, new_frame_item, entry->writable) == false){
 			return false;
@@ -270,11 +270,12 @@ spage_table_load(struct splmt_page_table *table, uint32_t *pagedir, void *upage)
 			return false;
 		}
 	}
-
+// printf("las time\n");
 	entry->frame_vaddr = new_frame_item;
 	entry->type = FRAME;
 	pagedir_set_dirty (pagedir, new_frame_item, false);
 	// printf("finish %d\n",entry->type  );
+	// printf("las\n");
 	return true;
 }
 

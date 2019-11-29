@@ -63,12 +63,10 @@ pick_frame_to_evict(){
 				pagedir_set_accessed(t->pagedir, fte->user_addr, false);
 				// e = list_next(e);
 				// continue;
-			} else{
+			// } else{
 				return fte;
 			}
 
-				// printf("zzzzzzzzzz\n");
-				// return fte;
 			
 		// }
 		e = list_next(e);
@@ -129,8 +127,9 @@ void* frame_evict (enum palloc_flags flags)
    in the first time, try to use frame eviction. Implement
    by encapsulate palloc_get_page() in palloc.c. */
 
-void * frame_alloc(void* user_addr, enum palloc_flags flag){	
-	
+void * frame_alloc(void* user_addr, enum palloc_flags flag){
+
+	lock_acquire(&frame_lock);
 	void* frame_addr = palloc_get_page(PAL_USER | flag);
 
 	if (!frame_addr){
@@ -176,7 +175,7 @@ void * frame_alloc(void* user_addr, enum palloc_flags flag){
 	// if (!lock_try_acquire (&f->frame_entry_lock))
 	// 	continue;
 	frame_table_add(user_addr, frame_addr);
-	// lock_release(&f->frame_entry_lock);
+	lock_release(&frame_lock);
 	return frame_addr;
 	
 	

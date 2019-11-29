@@ -189,8 +189,10 @@ page_fault (struct intr_frame *f)
 
 // printf("kkkkkkkkk\n");
 
-    if(! spage_table_load(thread_current()->splmt_page_table, thread_current()->pagedir, fault_page) ) {
-// printf("page??????????????????????????????\n");
+    if(spage_table_load(thread_current()->splmt_page_table, thread_current()->pagedir, fault_page) == false) {
+// printf("page load fail............\n");
+      thread_current()->process_terminate_message = -1;
+      thread_exit();
       goto PAGE_FAULT_VIOLATED_ACCESS;
     }
     return;

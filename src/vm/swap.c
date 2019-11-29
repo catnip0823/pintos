@@ -46,11 +46,11 @@ swap_write_out(void* frame_addr){
    it succeed to do so. */
 bool
 swap_read_in(unsigned int idx, void* frame_addr){
-	// printf("swap in\n");
-	if (frame_addr == NULL || swap_block == NULL || swap_map == NULL)
-		return false;
-	if (bitmap_test(swap_map, idx) == true)
-		PANIC("Swap in wrong place.");
+	// printf("swap in %d!\n", idx);
+	// if (frame_addr == NULL || swap_block == NULL || swap_map == NULL)
+		// return false;
+	// if (bitmap_test(swap_map, idx) == true)
+		// PANIC("Swap in wrong place.");
 	// bitmap_flip(swap_map, idx);
 	unsigned int i;
 	for (i = 0; i < SEC_NUM_PER_PAGE; i++)

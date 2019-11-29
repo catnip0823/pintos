@@ -161,6 +161,7 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+struct lock frame_lock;
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
