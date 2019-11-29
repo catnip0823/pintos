@@ -19,29 +19,26 @@ struct splmt_page_table
 
 /* Structure of page table entry. */
 struct splmt_page_entry{
-	struct hash_elem elem;//
+	struct hash_elem elem;     /* Used to be put in the hash. */
 
-	enum splmt_page_type type;
+	enum splmt_page_type type; /* The type of the page. */
 
+	uint8_t* user_vaddr;       /* The user virtual address of the page. */
+	uint8_t* frame_vaddr;      /* The physical address of the page. */
 
-	uint8_t* user_vaddr;//
-	uint8_t* frame_vaddr;//
+	struct file* file;         /* A pointer to the file of this page. */
 
-	struct file* file;//
-
+	uint32_t valid_bytes;      /* Read bytes of the page, non-zero. */
+	uint32_t zero_bytes;       /* Zero bytes of the page, always zero. */
+	uint32_t offset;           /* The offset of this page. */
+	unsigned swap_idx;         /* Indicate where it is stored if swapped. */
 	
+	bool writable;             /* Whether this page is writable. */
 
-	uint32_t valid_bytes;//
-	uint32_t zero_bytes;//
-	uint32_t offset;//
-	unsigned swap_idx;
-	
-	bool writable;//
-
-	bool accessed;
-	bool loaded;
-	bool in_swap;
-	bool attached;
+	bool accessed;             /* Whether is accessed recently. */
+	bool loaded;               /* Whether is has been loaded. */
+	bool in_swap;              /* Whether it is in the swap slot. */
+	bool attached;             /* Whether it is installed by stack growth.*/
 }; /* Subject to change. */
 
 

@@ -6,19 +6,19 @@
 #include "threads/synch.h"
 
 
-struct list frame_table;
+struct list frame_table;  /* The frame table. */
 
 
 struct frame_table_entry{
-	void* frame_addr;
-	void* user_addr;
-	struct thread* owner;
-	struct lock frame_entry_lock;
+	void* frame_addr;              /* The frame addr of entry. */
+	void* user_addr;               /* User addr of the entry. */
+	struct thread* owner;          /* The thread which own the page.*/
+	struct lock frame_entry_lock;  /* Lock to synchronize. */
 
-	struct list_elem lelem;
-	struct splmt_page_entry* spte;
+	struct list_elem lelem;        /* Elem to put it into the list. */
+	struct splmt_page_entry* spte; /* Corosponding page table entry. */
 
-	bool pinned;
+	bool pinned;                   /* Whether it is attached to others.*/
 };
 
 void frame_init_table();
