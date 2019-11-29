@@ -7,7 +7,7 @@
 
 
 struct list frame_table;  /* The frame table. */
-struct lock clock_lock;
+//struct lock clock_lock;
 
 
 struct frame_table_entry{

@@ -12,7 +12,7 @@
 void 
 frame_init_table(){
 	list_init(&frame_table);
-	lock_init(&clock_lock);
+//lock_init(&clock_lock);
 }
 
 
@@ -61,11 +61,11 @@ void *frame_alloc(void* user_addr, enum palloc_flags flag){
 		spte->swap_idx = idx;
 		spte->type = SWAP;
 		
-		lock_acquire(&clock_lock);
+		//lock_acquire(&clock_lock);
 		list_remove (&entry_to_evict->elem);
-		lock_release(&clock_lock);
+		//lock_release(&clock_lock);
 		
-		// pagedir_clear_page(entry_to_evict->owner->pagedir, entry_to_evict->user_addr);
+		pagedir_clear_page(entry_to_evict->owner->pagedir, entry_to_evict->user_addr);
 		palloc_free_page(entry_to_evict->frame_addr);
 		frame_addr = palloc_get_page (PAL_USER | flag);
 		ASSERT (frame_addr != NULL);
@@ -90,9 +90,9 @@ frame_table_add(void* user_addr, void* frame_addr){
 	fte->frame_addr = frame_addr;
 	fte->user_addr = user_addr;
 	fte->owner = thread_current();
-	lock_acquire(&clock_lock);
+	//lock_acquire(&clock_lock);
 	list_push_back(&frame_table, &fte->elem);
-	lock_release(&clock_lock);
+	//lock_release(&clock_lock);
 	
 }
 
@@ -124,9 +124,9 @@ frame_table_find(void* frame_addr){
 void
 frame_free_entry(void* frame_addr){
 	struct frame_table_entry* entry = frame_table_find(frame_addr);
-	lock_acquire(&clock_lock);
+	//lock_acquire(&clock_lock);
 	list_remove(&(entry->elem));
-	lock_release(&clock_lock);
+	//lock_release(&clock_lock);
 	palloc_free_page(frame_addr);
 
 }
