@@ -167,7 +167,7 @@ void * frame_alloc(void* user_addr, enum palloc_flags flag){
     // printf("end evict\n");
 
     frame_addr = palloc_get_page (PAL_USER | flag);
-    // ASSERT (frame_addr != NULL);
+    ASSERT (frame_addr != NULL);
 
 
 		// frame_addr = frame_evict(flag);
