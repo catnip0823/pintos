@@ -7,7 +7,6 @@
 
 
 struct list frame_table;  /* The frame table. */
-//struct lock clock_lock;
 
 /* Structure of the frame table emtry. */
 struct frame_table_entry{
@@ -31,10 +30,7 @@ struct frame_table_entry* frame_table_find(void* frame_addr);
 /* Delete an entry, free the resourse. */
 void frame_free_entry(void* frame_addr);
 
-/* The process of eviction. */
-void* frame_evict(enum palloc_flags flag);
-
 /* Find the frame to evict in the frame table. */
-struct frame_table_entry* find_entry_to_evict();
+struct frame_table_entry* pick_frame_to_evict();
 
 #endif

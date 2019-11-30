@@ -17,13 +17,21 @@
 /* The lock to be used in system call. */
 struct lock syscall_critical_section;
 
+/* Structure of the memory owned by a process. */
+struct process_mmap{
+  struct list_elem elem;  /* Elem to put into the list. */
+  struct file* file;      /* A pointer to the mmap file. */
+  void *addr;             /* the virtual address the file map to. */
+  int id;                 /* the size of the mapped file. */
+};
+
+
 /* Function as the system call handler. */
 static void syscall_handler (struct intr_frame *);
 
 /* Function to check the validity of the pointer. */
 void check_valid_pointer(void *pointer);
 void check_vaid(void *pointer);
-void check_physical_pointer(void *pointer);
 int get_value(uint8_t * ptr);
 void check_str(char* ptr);
 void check_pointer(void* pointer, size_t size);
@@ -106,7 +114,7 @@ syscall_handler (struct intr_frame *f UNUSED){
       arg1 = *((int*)f->esp+1);
       arg2 = *((int*)f->esp+2);
       file = (char*)arg1;
-      check_physical_pointer((void*)file);
+      check_valid_pointer((void*)file);
       f->eax = syscall_create(file, (unsigned int)arg2);
   		break;
     case SYS_REMOVE:
@@ -114,7 +122,7 @@ syscall_handler (struct intr_frame *f UNUSED){
       check_valid_pointer((void*)((int*)f->esp + 1));
       arg1 = *((int*)f->esp+1);
       file = (char*)arg1;
-      check_physical_pointer((void*)file);
+      check_valid_pointer((void*)file);
       f->eax = syscall_remove(file);
       break;
   	case SYS_OPEN:
@@ -122,7 +130,7 @@ syscall_handler (struct intr_frame *f UNUSED){
   		check_valid_pointer((void*)((int*)f->esp + 1));
       arg1 = *((int*)f->esp+1);
       file = (char*)arg1;
-      check_physical_pointer((void*)file);
+      check_valid_pointer((void*)file);
       f->eax = syscall_open(file);
       break;
   	case SYS_FILESIZE:
@@ -172,8 +180,10 @@ syscall_handler (struct intr_frame *f UNUSED){
       syscall_close((int)arg1);
       break;
 
+    /* for vm syscall mmap and munmap */
     #ifdef VM
     case SYS_MMAP:
+      /* Check validity of arguments. */
       check_valid_pointer((void *)((int*)f->esp+1));
       check_valid_pointer((void *)((int*)f->esp+2));
       arg1 = *((int*)f->esp+1);
@@ -181,6 +191,7 @@ syscall_handler (struct intr_frame *f UNUSED){
       f->eax = syscall_mmap((int)arg1, (void*)arg2);
       break;
     case SYS_MUNMAP:
+      /* Check validity of arguments. */
       check_valid_pointer((void *)((int*)f->esp+1));
       arg1 = *((int*)f->esp+1);
       syscall_munmap((int)arg1);
@@ -198,12 +209,17 @@ syscall_handler (struct intr_frame *f UNUSED){
    addr, or invalid page */
 void 
 check_valid_pointer(void *pointer){
+  /* if the given pointer is null, exit immediately */
 	if (pointer == NULL)
 		syscall_exit(-1);
+  /* if the given pointer is not user addr, exit immediately */
 	if (is_user_vaddr(pointer) == false)
 		syscall_exit(-1);
+  /* if the given pointer is kernel addr, exit immediately */
 	if (is_kernel_vaddr(pointer))
 		syscall_exit(-1);
+  /* if cannot get physical address corresponds to 
+  the current thread's pagedir, exit immediately */
 	if (!pagedir_get_page(thread_current()->pagedir, pointer))
 		syscall_exit(-1);
 }
@@ -213,29 +229,14 @@ check_valid_pointer(void *pointer){
    like the function above, and return the char 
    pointer of the page directory */
 void
-check_physical_pointer(void *pointer){
-	if (pointer == NULL)
-		syscall_exit(-1);
-	if (is_user_vaddr(pointer) == false)
-		syscall_exit(-1);
-	if (is_kernel_vaddr(pointer))
-		syscall_exit(-1);
-	void * ret_value = (void *)pagedir_get_page(
-                     thread_current()->pagedir, pointer);
-	if (!ret_value)
-		syscall_exit(-1);
-	// return (const char *)ret_value;
-}
-
-/* Check the validity of physical pointers, just
-   like the function above, and return the char 
-   pointer of the page directory */
-void
 check_vaid(void *pointer){
+  /* if the given pointer is null, exit immediately */
   if (pointer == NULL)
     syscall_exit(-1);
+  /* if the given pointer is not user addr, exit immediately */
   if (is_user_vaddr(pointer) == false)
     syscall_exit(-1);
+  /* if the given pointer is kernel addr, exit immediately */
   if (is_kernel_vaddr(pointer))
     syscall_exit(-1);
 }
@@ -249,7 +250,6 @@ check_pointer(void* pointer, size_t size){
   check_valid_pointer((uint8_t*)pointer + size - 1);
 }
 
-  
 
 /* Reads a byte at user virtual address UADDR.
    UADDR must be below PHYS_BASE.
@@ -264,6 +264,9 @@ get_user (const uint8_t *uaddr)
   return result;
 }
 
+/* For read syscall, check whether can read byte ret_value
+   at user virtual address pointer, return immediately if
+   a segfault occurred.  */
 void check_buffer(void *pointer){
   if (get_user(pointer) == -1)
     syscall_exit(-1);
@@ -491,92 +494,122 @@ syscall_close (int fd){
   lock_release(&syscall_critical_section);
 }
 
-
-struct process_mmap{
-  struct list_elem elem;
-  struct file* file;
-  void *addr;
-  int id;
-};
-
+/* Maps the file open as fd into the process's virtual
+   address space. The entire file is mapped into 
+   consecutive virtual pages starting at addr. */
 int syscall_mmap(int fd, void *addr){
+  /* fail if addr is 0. */
+  /* fail if addr is not page-aligned. */
   if (addr == NULL || pg_ofs(addr) != 0)
     return -1;
 
-  if (fd <= 1)
+  /* fd 0 and 1(console input and output) are not mappable. */
+  if (fd == 0 || fd == 1)
     return -1;
+
+  /* find the file with fd. */
   lock_acquire(&syscall_critical_section);
   struct file *current_file;
   if (thread_current()->process_files[fd-2])
-    current_file = file_reopen (thread_current()->process_files[fd-2]);
+    current_file = file_reopen(thread_current()->process_files[fd-2]);
 
+  /* mmap fail if current_file has a length of zero bytes */
   if ((!current_file) || file_length(current_file) == 0){
     lock_release(&syscall_critical_section);
     return -1;
   }
 
-  // map
-  for (size_t i = 0; i < file_length(current_file); i+=PGSIZE){
-    if (spage_table_find_entry(thread_current()->splmt_page_table, addr + i)){
+  /* Find whether the range of pages mapped overlaps any
+     existing set of mapped pages, if true return -1. */
+  struct splmt_page_table *pt = thread_current()->splmt_page_table;
+  for (size_t i = 0; i < file_length(current_file); i += PGSIZE){
+    if (spage_table_find_entry(pt, addr + i)){
+      /* If the virtual address is in the page table, 
+         need not map and return -1 immediately. */
       lock_release(&syscall_critical_section);
       return -1;
     }
   }
 
-
-  for (size_t i = 0; i < file_length(current_file); i+=PGSIZE){
+  /* If all the conditions are satisfied, start mapping. */
+  for (size_t i = 0; i < file_length(current_file); i += PGSIZE){
     uint32_t valid_bytes = file_length(current_file) - i;
     if (PGSIZE < valid_bytes)
       valid_bytes = PGSIZE;
-    spage_table_add_file(thread_current()->splmt_page_table, current_file,
-                         i, addr + i, valid_bytes, PGSIZE - valid_bytes, true);
+    /* Add new entry to page table, with type FILE. */
+    spage_table_add_file(pt, current_file, i, addr + i, valid_bytes, 
+                         PGSIZE - valid_bytes, true);
   }
 
+  /* allocate a new space to store the map of the process. */
+  struct process_mmap *map = (struct process_mmap*)
+                             malloc(sizeof(struct process_mmap));
+  /* find mapping ID that identifies the mapping within the process. */
   int return_val;
   if (list_empty(&thread_current()->list_mmap))
     return_val = 1;
-  else
-    return_val = list_entry(list_back(&thread_current()->list_mmap), struct process_mmap, elem)->id + 1;
-
-  struct process_mmap *map = (struct process_mmap*)malloc(sizeof(struct process_mmap));
+  else{
+    /* find the last elem's mmap id of the mapped list. */
+    struct list_elem * last_elem = list_back(&thread_current()->list_mmap);
+    return_val = list_entry(last_elem, struct process_mmap, elem)->id + 1;
+  }
+  /* store the important imformation of the mapp. */
+  map->id = return_val; 
   map->file = current_file;
   map->addr = addr;
-  map->id = return_val;
+
+  /* add the new map into the process's map list. */
   list_push_back(&thread_current()->list_mmap, &map->elem);
   lock_release(&syscall_critical_section);
-
+  /* If finally success, returns a "mapping ID" uniquely
+     identifies the mapping within the process */
   return return_val;
 }
 
 
+/* Unmaps the mapping designated by mapping, which must 
+   be a mapping ID returned by a previous call to mmap 
+   by the same process that has not yet been unmapped. */
 void syscall_munmap(int mapping){
   struct process_mmap *map;
+  /* check whether the mapping ID is in process's map list. */
   bool if_not_in_list = true;
-  for (struct list_elem *item = list_begin(&thread_current()->list_mmap); item != list_end(&thread_current()->list_mmap); item = list_next(item)){
+  for (struct list_elem *item = list_begin(&thread_current()->list_mmap);
+                         item != list_end(&thread_current()->list_mmap); 
+                         item = list_next(item)){
     map = list_entry(item, struct process_mmap, elem);
     if (mapping == map->id){
+      /* If mapping ID is in process's map list, break and ummap. */
       if_not_in_list = false;
       break;
     }
   }
+  /* return immediately if mapping ID is in process's map list. */
   if (if_not_in_list)
     return;
+
   lock_acquire(&syscall_critical_section);
+  /* Start ummapping. */
   for (size_t i = 0; i < file_length(map->file); i += PGSIZE){
     void *addr = map->addr + i;
     uint32_t valid_bytes = file_length(map->file) - i;
     if (PGSIZE < valid_bytes)
       valid_bytes = PGSIZE;
+    /* All pages written to by the process 
+       are written back to the file.*/
     spage_munmap(thread_current(), map->file, addr, i, valid_bytes);
   }
+  /* Remove the map from the process's map list. */
   list_remove(&map->elem);
   lock_release(&syscall_critical_section);
 }
 
-
+/* Function called at process exit, free the 
+   current process's resources and exit. */
 void free_all(){
   struct list *mmlist = &thread_current()->list_mmap;
   struct list_elem *e = list_begin (mmlist);
   struct process_mmap *desc = list_entry(e, struct process_mmap, elem);
+  /* ummap all the mapped memory owned by the process. */
   syscall_munmap (desc->id);
 }

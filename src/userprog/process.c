@@ -175,6 +175,7 @@ process_exit (void){
   if (cur->pagedir && thread_current()->parent->check_load_success)
     printf("%s: exit(%d)\n", cur->name, cur->process_terminate_message);
 
+  /* Free the current process's resources and exit. */
   free_all();
 
   /* Detect whether it have child. */
@@ -539,9 +540,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
-      #ifdef VM
-        ofs += PGSIZE;
-      #endif
+      ofs += PGSIZE;
     }
   return true;
 }
@@ -554,6 +553,7 @@ setup_stack (void **esp, const char *whole_name)
   uint8_t *kpage;
   bool success = false;
 
+  /* Get a page of memory. */
   #ifdef VM
     kpage = frame_alloc (PHYS_BASE - PGSIZE, PAL_USER | PAL_ZERO);
   #else
@@ -611,8 +611,6 @@ setup_stack (void **esp, const char *whole_name)
         /* Set this to be zero. */
         *esp = *esp - 4;
         *(int *)(*esp) = 0;
-        // #endif
-
     }
       else{
         #ifdef VM

@@ -172,19 +172,27 @@ page_fault (struct intr_frame *f)
 
 
   void *fault_page = (void*)pg_round_down(fault_addr);
-  if (!not_present && user) {
-    kill(f);
-  }
+
   if (!not_present){
-    if (user)
+    if (user){
+      /* If the user want to access the error code that
+         is not present, terminate immediately. */
       kill(f);
+    }
     else{
+      /* If the kernel want to access the error code that is not
+       present, exit the process immediately. */
       thread_current()->process_terminate_message = -1;
       thread_exit (); 
     }
   }
+  /* check wheter need to setup stack and
+     then setup stack if necessary. */
   check_and_setup_stack(user, f, fault_addr);
-  if(!spage_table_load(thread_current()->splmt_page_table, thread_current()->pagedir, fault_page)) {
+  struct thread *curr = thread_current();
+  /* Load the page from FILE, FRAME, ZERO, or SWAP. */
+  if(!spage_table_load(curr->splmt_page_table, curr->pagedir, fault_page)){
+    /* If load the page fail, exit the process immediately. */
     thread_current()->process_terminate_message = -1;
     thread_exit();
   }
