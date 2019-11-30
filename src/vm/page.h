@@ -67,12 +67,6 @@ spage_table_find_entry(struct splmt_page_table *table, void* page);
 static void
 install_file_page(struct splmt_page_entry* spte, void *new_frame);
 
-/* When a mapping is unmapped, all pages written to
-   by the process are written back to the file.*/
-void
-spage_munmap(struct thread * thread, struct file *f,
-			 void *page,  off_t offset, size_t bytes);
-
 /* Install and load page for page table entry, 
    function called at spage_table_load(). */
 void
