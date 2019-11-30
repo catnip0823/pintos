@@ -17,7 +17,6 @@ static bool splmt_hash_less_func(const struct hash_elem* elem1,
 					 const struct hash_elem* elem2, void* aux UNUSED);
 
 
-
 /* Function required by the hash table,
    use the user virtual address as the 
    key, obviously it is unique in table. */
@@ -56,6 +55,7 @@ spage_table_init(){
 	return supt;
 }
 
+
 /* Function for create and initialize a new page table
    entry. Only called by three other functions. */
 static struct splmt_page_entry*
@@ -81,12 +81,12 @@ creat_entry(struct file* file, enum splmt_page_type type,
 	return spte;
 }
 
+
 /* Function for add new entry to page table, with type
    FRAME, return true if success, return false if failed. */
 bool
 spage_table_add_frame(struct splmt_page_table *splmt_page_table,
-					  void *upage, void *kpage)
-{
+					  void *upage, void *kpage){
 	/* Allocate a new space for the new entry. */
 	struct splmt_page_entry *entry;
 	entry = (struct splmt_page_entry *)
@@ -123,6 +123,7 @@ spage_table_add_file(struct splmt_page_table *splmt_page_table,
 	return false;
 	/* return whether successfully add an entry into the page table. */
 }
+
 
 /* Function for add new entry to page table, with type
    ZERO, return true if success, return false if failed. */
@@ -189,6 +190,7 @@ spage_table_install_page(struct splmt_page_entry* spte, void *new_frame){
 	}
 }
 
+
 /* Load the page from FILE, FRAME, ZERO, or SWAP. */
 bool
 spage_table_load(struct splmt_page_table *table, 
@@ -218,17 +220,15 @@ spage_table_load(struct splmt_page_table *table,
 		/* if the type is FILE, set the page 
 		   the same as entry's writable. */
 		if (!pagedir_set_page(pagedir, upage, new_frame_item,
-								entry->writable)){
+								entry->writable))
 			/* false if memory allocation failed. */
 			return false;
-		}
 	}
 	else{
 		/* if the type is FILE, set the page writable. */
-		if (!pagedir_set_page(pagedir, upage, new_frame_item, true)){
+		if (!pagedir_set_page(pagedir, upage, new_frame_item, true))
 			/* false if memory allocation failed. */
 			return false;
-		}
 	}
 	entry->frame_vaddr = new_frame_item;
 	entry->type = FRAME;
@@ -239,7 +239,7 @@ spage_table_load(struct splmt_page_table *table,
 
 
 /* When a mapping is unmapped, all pages written to
-   by the process are written back to the file.*/
+   by the process are written back to the file. */
 void
 spage_munmap(struct thread *thread, struct file *f,
 			 void *page, off_t offset, size_t bytes){
@@ -247,10 +247,9 @@ spage_munmap(struct thread *thread, struct file *f,
 									 thread->splmt_page_table, page);
 	if (entry->type == FRAME){
 		/* Only need to write back into the FILE when is dirty */
-		if (pagedir_is_dirty(thread->pagedir, entry->user_vaddr)){
+		if (pagedir_is_dirty(thread->pagedir, entry->user_vaddr))
 			/* write size bytes back into the FILE startting offset. */
 			file_write_at(f, entry->user_vaddr, bytes, offset);
-		}
 		pagedir_clear_page(thread->pagedir, entry->user_vaddr);
 	}
 	if (entry->type == SWAP){
@@ -264,6 +263,7 @@ spage_munmap(struct thread *thread, struct file *f,
 	/* Removed the pages from the process's list of virtual pages.*/
 	hash_delete(&thread->splmt_page_table->splmt_pages, &entry->elem);
 }
+
 
 /* Grow stack when necessary, return whether it succeed. */
 void check_and_setup_stack(bool is_user, struct intr_frame *f,
