@@ -18,28 +18,30 @@ frame_init_table(){
 
 /* Find a frame to evict in the frame table, using clock
    algorithm. Return the pointer to the frame table entry
-   to evict. Panic if not able to find the frame. */
+   to evict. Return NULL if not able to find the frame. */
 struct frame_table_entry*
 pick_frame_to_evict(){
 	struct list_elem * e = list_begin(&frame_table);
-	
+	/* Count the number of iterations. */
 	int iter = 0;
 	while(true){
-		struct frame_table_entry * fte = list_entry(e, struct frame_table_entry, elem);
+		struct frame_table_entry * fte = list_entry(e, 
+									struct frame_table_entry, elem);
 		struct thread* t = fte->owner;
 		if (pagedir_is_accessed(t->pagedir, fte->user_addr)){
 			pagedir_set_accessed(t->pagedir, fte->user_addr, false);
 			return fte;
 		}
-
 		e = list_next(e);
+		/* If it has reached the end of the table. */
 		if (e == list_end(&frame_table)){
 			e = list_begin(&frame_table);
+			/* Increase the counter. */
 			iter++;
 		}
-		if (iter > 2){
+		/* If not able to find one. */
+		if (iter > 2)
 			return NULL;
-		}
 	}
 }
 
@@ -47,35 +49,40 @@ pick_frame_to_evict(){
 /* Allocate new frame in the physical memory. If failed
    in the first time, try to use frame eviction. Implement
    by encapsulate palloc_get_page() in palloc.c. */
-
-void *frame_alloc(void* user_addr, enum palloc_flags flag){
-
+void *
+frame_alloc(void* user_addr, enum palloc_flags flag){
+	/* Acquire the lock and allocate the page. */
 	lock_acquire(&frame_lock);
 	void* frame_addr = palloc_get_page(PAL_USER | flag);
-
+	/* If fail to allocate, do the eviction process. */
 	if (!frame_addr){
+		/* Pick the frame and clear the page. */
 		struct frame_table_entry *entry_to_evict = pick_frame_to_evict();
-		pagedir_clear_page(entry_to_evict->owner->pagedir, entry_to_evict->user_addr);
+		pagedir_clear_page(entry_to_evict->owner->pagedir,
+									entry_to_evict->user_addr);
+		/* Swap out the data. */
 		unsigned idx = swap_write_out(entry_to_evict->frame_addr);
-		struct splmt_page_entry* spte = spage_table_find_entry(entry_to_evict->owner->splmt_page_table, entry_to_evict->user_addr);
+		/* Find the page table entry and set parameters. */
+		struct splmt_page_entry* spte = spage_table_find_entry(
+								entry_to_evict->owner->splmt_page_table,
+								entry_to_evict->user_addr);
 		spte->swap_idx = idx;
 		spte->type = SWAP;
-		
-		//lock_acquire(&clock_lock);
+		/* Remove the entry from frame table. */
 		list_remove (&entry_to_evict->elem);
-		//lock_release(&clock_lock);
-		
-		pagedir_clear_page(entry_to_evict->owner->pagedir, entry_to_evict->user_addr);
+		/* Clear and free the page. */
+		pagedir_clear_page(entry_to_evict->owner->pagedir,
+									entry_to_evict->user_addr);
 		palloc_free_page(entry_to_evict->frame_addr);
+		/* Try to allocate again. */
 		frame_addr = palloc_get_page (PAL_USER | flag);
 		ASSERT (frame_addr != NULL);
 	}
+	/* Add the entry to frame table. */
 	frame_table_add(user_addr, frame_addr);
 	lock_release(&frame_lock);
 	return frame_addr;
 }
-
-
 
 
 /* Add a frame to frame table, by initialize a new
@@ -84,15 +91,13 @@ void *frame_alloc(void* user_addr, enum palloc_flags flag){
 void
 frame_table_add(void* user_addr, void* frame_addr){
 	struct frame_table_entry* fte = malloc(sizeof(struct frame_table_entry));
-	if (!fte){
+	if (!fte)  /* If allocation fail. */
 		return;
-	}
 	fte->frame_addr = frame_addr;
 	fte->user_addr = user_addr;
 	fte->owner = thread_current();
-	//lock_acquire(&clock_lock);
+	/* Push to the back of the list. */
 	list_push_back(&frame_table, &fte->elem);
-	//lock_release(&clock_lock);
 	
 }
 
@@ -114,6 +119,7 @@ frame_table_find(void* frame_addr){
 			continue;
 		return entry;
 	}
+	/* If not able to find the entry. */
 	return NULL;
 }
 
@@ -124,9 +130,7 @@ frame_table_find(void* frame_addr){
 void
 frame_free_entry(void* frame_addr){
 	struct frame_table_entry* entry = frame_table_find(frame_addr);
-	//lock_acquire(&clock_lock);
+	/* Remove from the list and free the page. */
 	list_remove(&(entry->elem));
-	//lock_release(&clock_lock);
 	palloc_free_page(frame_addr);
-
 }
