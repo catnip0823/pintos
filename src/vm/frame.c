@@ -12,7 +12,6 @@
 void 
 frame_init_table(){
 	list_init(&frame_table);
-lock_init(&clock_lock);
 }
 
 
