@@ -4,9 +4,6 @@
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
-#include "threads/vaddr.h"
-#include "vm/page.h"
-#include "vm/frame.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -152,50 +149,19 @@ page_fault (struct intr_frame *f)
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
-
-  #ifndef VM
-    thread_current()->process_terminate_message = -1;
-    thread_exit (); 
-  #endif
-
-  //   /* To implement virtual memory, delete the rest of the function
-  //      body, and replace it with code that brings in the page to
-  //      which fault_addr refers. */
-  //   printf ("Page fault at %p: %s error %s page in %s context.\n",
-  //           fault_addr,
-  //           not_present ? "not present" : "rights violation",
-  //           write ? "writing" : "reading",
-  //           user ? "user" : "kernel");
-  //   kill (f);
-  //   syscall_exit(-1);
+  thread_current()->process_terminate_message = -1;
+  thread_exit (); 
 
 
-
-  void *fault_page = (void*)pg_round_down(fault_addr);
-  if (!not_present && user)
-    kill(f);
-  if (!not_present){
-    if (user){
-      /* If the user want to access the error code that
-         is not present, terminate immediately. */
-      kill(f);
-    }
-    else{
-      /* If the kernel want to access the error code that is not
-       present, exit the process immediately. */
-      thread_current()->process_terminate_message = -1;
-      thread_exit (); 
-    }
-  }
-  /* check wheter need to setup stack and
-     then setup stack if necessary. */
-  check_and_setup_stack(user, f, fault_addr);
-  /* Load the page from FILE, FRAME, ZERO, or SWAP. */
-  if(!spage_table_load(thread_current()->splmt_page_table,
-                       thread_current()->pagedir, fault_page)){
-    /* If load the page fail, exit the process immediately. */
-    thread_current()->process_terminate_message = -1;
-    thread_exit();
-  }
-  return;
+  /* To implement virtual memory, delete the rest of the function
+     body, and replace it with code that brings in the page to
+     which fault_addr refers. */
+  printf ("Page fault at %p: %s error %s page in %s context.\n",
+          fault_addr,
+          not_present ? "not present" : "rights violation",
+          write ? "writing" : "reading",
+          user ? "user" : "kernel");
+  kill (f);
+  syscall_exit(-1);
 }
+

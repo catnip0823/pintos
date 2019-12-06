@@ -227,7 +227,7 @@ real_time_sleep (int64_t num, int32_t denom)
   */
   int64_t ticks = num * TIMER_FREQ / denom;
 
-  // ASSERT (intr_get_level () == INTR_ON);
+  ASSERT (intr_get_level () == INTR_ON);
   if (ticks > 0)
     {
       /* We're waiting for at least one full timer tick.  Use
