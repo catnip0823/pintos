@@ -3,29 +3,35 @@
 #include "devices/block.h"
 #include <string.h>
 #include <bitmap.h>
-#include <list.h>
+#include <hash.h>
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "threads/malloc.h"
 #include "devices/timer.h"
 
-#define WRITE_BACK_FREQ   60 /* in terms of seconds */
+#define WRITE_BACK_FREQ   5 /* in terms of seconds */
 
 static struct bitmap *cache_free_map; /* true: sector is free. false: sector is taken */
-static struct list list_buffer_cache;
+static struct hash list_buffer_cache;
 static struct lock cache_lock;
 
 extern struct block *fs_device;
 
 static struct buffer_cache_entry *buffer_cache_find_sector (block_sector_t );
 static struct buffer_cache_entry *buffer_cache_bring_in_sector (block_sector_t );
+static void                       thread_entry_read_ahead (void *);
 static void                       thread_entry_write_back (void *);
+
+
+static unsigned  cache_hash(const struct hash_elem *p, void *aux UNUSED);
+static bool cache_less (const struct hash_elem *a, const struct hash_elem *b,
+           void *aux UNUSED);
 
 /* initializes buffer cache related structures */
 void
 buffer_cache_init (void)
 {
-  list_init (&list_buffer_cache);
+  hash_init (&list_buffer_cache, cache_hash, cache_less, NULL);
   lock_init (&cache_lock);
 
   /* initialize cache_free_map and mark all entries as true i.e. free */
@@ -96,14 +102,14 @@ buffer_cache_write (block_sector_t sector, const void *buffer, int sector_ofs, i
           entry->dirty = true;
 
           /* insert into cache list */
-          if (list_size (&list_buffer_cache) >= BUFFER_CACHE_SIZE)
+          if (hash_size (&list_buffer_cache) >= BUFFER_CACHE_SIZE)
             {
               /* something went wrong */
               PANIC ("buffer cache overflow");
             }
           else
             {
-              list_push_back (&list_buffer_cache, &entry->elem);
+              hash_insert(&list_buffer_cache, &entry->elem);
               entry->ok_to_evict = true;
             }
         }
@@ -133,10 +139,6 @@ buffer_cache_read (block_sector_t sector, void *buffer, int sector_ofs, int size
   memcpy (buffer, entry->data + sector_ofs, size);
   entry->accessed = true;
 
-  /* read ahead */
-  //if (entry != NULL)
-    //spawn_thread_read_ahead (sector);
-
   lock_release (&cache_lock);
 }
 
@@ -145,17 +147,17 @@ size_t
 buffer_cache_evict (void)
 {
   /* clock algo for eviction */
-  struct list_elem *e;
   bool candidate_found = false;
   struct buffer_cache_entry *candidate = NULL;
   size_t ret_val = BUFFER_CACHE_SIZE + 1; /* a big enough number to be NOT valid */
 
   while (true)
     {
-      for (e = list_begin (&list_buffer_cache); e != list_end (&list_buffer_cache);
-          e = list_next (e))
+      struct hash_iterator i;
+      hash_first (&i, &list_buffer_cache);
+      while(hash_next (&i))
         {
-          struct buffer_cache_entry *entry = list_entry (e, struct buffer_cache_entry, elem);
+          struct buffer_cache_entry *entry = hash_entry (hash_cur (&i), struct buffer_cache_entry, elem);
 
           if (!entry->ok_to_evict)
             continue;
@@ -181,7 +183,7 @@ buffer_cache_evict (void)
       if (candidate_found)
         {
           /* remove from cache list */
-          list_remove (&candidate->elem);
+          hash_delete (&list_buffer_cache, &candidate->elem);
 
           /* mark the entry as free in cache_free_map */
           bitmap_set (cache_free_map, candidate->cache_entry_no, true);
@@ -203,21 +205,56 @@ static struct buffer_cache_entry *
 buffer_cache_find_sector (block_sector_t sector)
 {
   struct buffer_cache_entry *buff_cache_entry = NULL;
-  struct list_elem *e;
-
-  for (e = list_begin (&list_buffer_cache); e != list_end (&list_buffer_cache);
-      e = list_next (e))
+  struct hash_elem * e;
+  struct buffer_cache_entry temp;
+  temp.sector_no = sector;
+  e = hash_find(&list_buffer_cache, &temp.elem);
+  if (e == NULL)
+    buff_cache_entry = NULL;
+  else
+	  buff_cache_entry = hash_entry(e, struct buffer_cache_entry, elem);
+  
+  struct buffer_cache_entry * ref = NULL;
+  struct hash_iterator i;
+  hash_first (&i, &list_buffer_cache);
+  while(hash_next (&i))
     {
-      struct buffer_cache_entry *entry = list_entry (e, struct buffer_cache_entry, elem);
-
+      struct buffer_cache_entry *entry = hash_entry (hash_cur (&i), struct buffer_cache_entry, elem);
       if (entry->sector_no == sector)
         {
-          buff_cache_entry = entry;
+          ref = entry;
           break;
         }
     }
+  ASSERT(buff_cache_entry == ref);
 
   return buff_cache_entry;
+}
+
+void
+spawn_thread_read_ahead (block_sector_t sector)
+{
+  block_sector_t *arg = (block_sector_t *) malloc (sizeof (block_sector_t));
+
+  if (arg != NULL)
+    {
+      *arg = sector + 1;
+      (void) thread_create ("buff_cache_ra", 0, thread_entry_read_ahead, arg);
+    }
+}
+
+static void
+thread_entry_read_ahead (void *arg)
+{
+  lock_acquire (&cache_lock);
+
+  block_sector_t sector =  *(block_sector_t *) arg;
+
+  buffer_cache_bring_in_sector (sector);
+
+  lock_release (&cache_lock);
+
+  free (arg);
 }
 
 /* cache lock must be acquired */
@@ -256,14 +293,14 @@ buffer_cache_bring_in_sector (block_sector_t sector)
       new_entry->accessed = false;
       new_entry->dirty = false;
 
-      if (list_size (&list_buffer_cache) >= BUFFER_CACHE_SIZE)
+      if (hash_size (&list_buffer_cache) >= BUFFER_CACHE_SIZE)
         {
           /* something went wrong */
           PANIC ("buffer cache overflow");
         }
       else
         {
-          list_push_back (&list_buffer_cache, &new_entry->elem);
+          hash_insert (&list_buffer_cache, &new_entry->elem);
           new_entry->ok_to_evict = true;
         }
     }
@@ -277,12 +314,11 @@ buffer_cache_write_back (void)
 {
   lock_acquire (&cache_lock);
 
-  struct list_elem *e;
-
-  for (e = list_begin (&list_buffer_cache); e != list_end (&list_buffer_cache);
-      e = list_next (e))
+  struct hash_iterator i;
+  hash_first (&i, &list_buffer_cache);
+  while(hash_next (&i))
     {
-      struct buffer_cache_entry *entry = list_entry (e, struct buffer_cache_entry, elem);
+      struct buffer_cache_entry *entry = hash_entry (hash_cur (&i), struct buffer_cache_entry, elem);
 
       if (entry->dirty)
         {
@@ -307,4 +343,20 @@ thread_entry_write_back (void *arg UNUSED)
       /* sleep */
       timer_sleep (WRITE_BACK_FREQ * TIMER_FREQ);
     }
+}
+
+static unsigned
+cache_hash(const struct hash_elem *p_, void *aux UNUSED){
+  const struct buffer_cache_entry *p = hash_entry (p_, struct buffer_cache_entry, elem);
+  return hash_bytes (&p->sector_no, sizeof p->sector_no);
+}
+
+static bool
+cache_less (const struct hash_elem *a_, const struct hash_elem *b_,
+           void *aux UNUSED)
+{
+  const struct buffer_cache_entry *a = hash_entry (a_, struct buffer_cache_entry, elem);
+  const struct buffer_cache_entry *b = hash_entry (b_, struct buffer_cache_entry, elem);
+
+  return a->sector_no < b->sector_no;
 }
