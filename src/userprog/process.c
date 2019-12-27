@@ -175,6 +175,23 @@ process_exit (void){
   if (cur->pagedir && thread_current()->parent->check_load_success)
     printf("%s: exit(%d)\n", cur->name, cur->process_terminate_message);
 
+  /* Detect whether it have child. */
+  int whether_have_child = 0;
+  for (int i = 0; i < PROCESS_FILE_MAX; i++){
+    if (cur->process_files[i]){
+      whether_have_child = 1;
+      break;
+    }
+  }
+
+  /* Close all the file it has opened. */
+  for (int i = 0; i < PROCESS_FILE_MAX; i++){
+    if (cur->process_files[i]){
+      file_close(cur->process_files[i]);
+      cur->process_files[i] = NULL;
+    }
+  }
+
   /* Deal with the file itself. */
   if (cur->this_file){
     file_allow_write(cur->this_file);
@@ -185,7 +202,7 @@ process_exit (void){
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
-  if (pd != NULL) {
+  if (pd != NULL) {    		
       /* Correct ordering here is crucial.  We must set
          cur->pagedir to NULL before switching page directories,
          so that a timer interrupt can't switch back to the

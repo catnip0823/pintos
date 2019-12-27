@@ -7,7 +7,6 @@
 #include "threads/vaddr.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
-#include "filesys/inode.h"
 
 /* The max length of a command line. */
 #define MAX_CMD_LEN 50
@@ -21,12 +20,11 @@ static void syscall_handler (struct intr_frame *);
 /* Function to check the validity of the pointer. */
 void check_valid_pointer(void *pointer);
 const char *check_physical_pointer(void *pointer);
+int get_value(uint8_t * ptr);
+void check_str(char* ptr);
 void check_pointer(void* pointer, size_t size);
-
-// proj4 helper functions
-struct file* fd_to_file(int fd);
-struct file_struct* file_to_struct(struct file* file);
-struct dir* file_to_dir(struct file* file);
+char *check_str_pro (const char *us);
+int copy_to (uint8_t *dst, const uint8_t *usrc);
 
 /* Function to each of the system call. */
 void syscall_halt (void);
@@ -43,11 +41,6 @@ void syscall_seek (int fd, unsigned position);
 unsigned syscall_tell (int fd);
 void syscall_close (int fd);
 
-bool syscall_chdir (const char *dir);
-bool syscall_mkdir (const char *dir);
-bool syscall_readdir (int fd, char *name);
-bool syscall_isdir (int fd);
-int syscall_inumber (int fd);
 
 /* Function to initialize the system call. */
 void
@@ -67,36 +60,36 @@ syscall_handler (struct intr_frame *f UNUSED){
   check_pointer((void *)f->esp, 4);
 
   /* Varibales to represent the argument. */
-  int arg1;
-  int arg2;
-  int arg3;
+	int arg1;
+	int arg2;
+	int arg3;
   char *file;
 
   /* Determine the type of system call. */
   switch(*(int*) f->esp){
-    case SYS_HALT:
+  	case SYS_HALT:
       syscall_halt();
-      break;
-    case SYS_EXIT:
+  		break;
+  	case SYS_EXIT:
       /* Check validity of argument. */
-      check_valid_pointer((void*)((int*)f->esp + 1));
-      arg1 = *((int*)f->esp+1);
-      syscall_exit((int)arg1);
-      break;
-    case SYS_EXEC:
+  		check_valid_pointer((void*)((int*)f->esp + 1));
+  		arg1 = *((int*)f->esp+1);
+  		syscall_exit((int)arg1);
+  		break;
+  	case SYS_EXEC:
       /* Check validity of argument. */
       check_valid_pointer((void*)((int*)f->esp + 1));
       check_valid_pointer((void*)*((int*)f->esp + 1));
       arg1 = *((int*)f->esp+1);
-      f->eax = syscall_exec((int)arg1);
+  		f->eax = syscall_exec((int)arg1);
       break;
-    case SYS_WAIT:
+  	case SYS_WAIT:
       /* Check validity of argument. */
       check_valid_pointer((void*)((int*)f->esp + 1));
       arg1 = *((int*)f->esp+1);
       f->eax = syscall_wait((int)arg1);
-      break;
-    case SYS_CREATE:
+  		break;
+  	case SYS_CREATE:
       /* Check validity of arguments. */
       check_valid_pointer((void*)((int*)f->esp + 1));
       check_valid_pointer((void*)((int*)f->esp + 2));
@@ -105,7 +98,7 @@ syscall_handler (struct intr_frame *f UNUSED){
       file = (char*)arg1;
       file = check_physical_pointer((void*)file);
       f->eax = syscall_create(file, (unsigned int)arg2);
-      break;
+  		break;
     case SYS_REMOVE:
       /* Check validity of arguments. */
       check_valid_pointer((void*)((int*)f->esp + 1));
@@ -114,23 +107,23 @@ syscall_handler (struct intr_frame *f UNUSED){
       file = check_physical_pointer((void*)file);
       f->eax = syscall_remove(file);
       break;
-    case SYS_OPEN:
+  	case SYS_OPEN:
       /* Check validity of arguments. */
-      check_valid_pointer((void*)((int*)f->esp + 1));
+  		check_valid_pointer((void*)((int*)f->esp + 1));
       arg1 = *((int*)f->esp+1);
       file = (char*)arg1;
       file = check_physical_pointer((void*)file);
       f->eax = syscall_open(file);
       break;
-    case SYS_FILESIZE:
+  	case SYS_FILESIZE:
       /* Check validity of argument. */
       check_valid_pointer((void*)((int*)f->esp + 1));
       arg1 = *((int*)f->esp+1);
       f->eax = syscall_filesize((int)arg1);
-      break;
-    case SYS_READ:
+  		break;
+  	case SYS_READ:
       /* Check validity of arguments. */
-      check_valid_pointer((void *)((int*)f->esp+1));
+  		check_valid_pointer((void *)((int*)f->esp+1));
       check_valid_pointer((void *)((int*)f->esp+2));
       check_valid_pointer((void *)((int*)f->esp+3));
       arg1 = *((int*)f->esp+1);
@@ -139,71 +132,39 @@ syscall_handler (struct intr_frame *f UNUSED){
       arg2 = check_physical_pointer((void*)arg2);
       f->eax = syscall_read((int)arg1, (void*)arg2, (unsigned int)arg3);
       break;
-    case SYS_WRITE:
+  	case SYS_WRITE:
       /* Check validity of arguments. */
-      check_valid_pointer((void *)((int*)f->esp+1));
-      check_valid_pointer((void *)((int*)f->esp+2));
-      check_valid_pointer((void *)((int*)f->esp+3));
-      arg1 = *((int*)f->esp+1);
-      arg2 = *((int*)f->esp+2);
-      arg3 = *((int*)f->esp+3);
+	  	check_valid_pointer((void *)((int*)f->esp+1));
+	  	check_valid_pointer((void *)((int*)f->esp+2));
+	  	check_valid_pointer((void *)((int*)f->esp+3));
+	  	arg1 = *((int*)f->esp+1);
+	  	arg2 = *((int*)f->esp+2);
+	  	arg3 = *((int*)f->esp+3);
       arg2 = check_physical_pointer((void*)arg2);
-      f->eax = syscall_write((int)arg1, (void*)arg2, (unsigned int)arg3);
-      break;
-    case SYS_SEEK:
+  		f->eax = syscall_write((int)arg1, (void*)arg2, (unsigned int)arg3);
+  		break;
+  	case SYS_SEEK:
       /* Check validity of arguments. */
-      check_valid_pointer((void *)((int*)f->esp+1));
+  		check_valid_pointer((void *)((int*)f->esp+1));
       check_valid_pointer((void *)((int*)f->esp+2));
       arg1 = *((int*)f->esp+1);
       arg2 = *((int*)f->esp+2);
       syscall_seek((int)arg1, (unsigned int)arg2);
       break;
-    case SYS_TELL:
+  	case SYS_TELL:
       /* Check validity of arguments. */
       check_valid_pointer((void *)((int*)f->esp+1));
       arg1 = *((int*)f->esp+1);
       f->eax = syscall_tell((int)arg1);
-      break;
-    case SYS_CLOSE:
+  		break;
+  	case SYS_CLOSE:
       /* Check validity of arguments. */
-      check_valid_pointer((void *)((int*)f->esp+1));
+  		check_valid_pointer((void *)((int*)f->esp+1));
       arg1 = *((int*)f->esp+1);
       syscall_close((int)arg1);
       break;
-    case SYS_CHDIR:
-      check_valid_pointer((void*)((int*)f->esp + 1));
-      arg1 = *((int*)f->esp+1);
-      file = (char*)arg1;
-      file = check_physical_pointer((void*)file);
-      f->eax = syscall_chdir(file);
-      break;
-    case SYS_MKDIR:
-      check_valid_pointer((void*)((int*)f->esp + 1));
-      arg1 = *((int*)f->esp+1);
-      file = (char*)arg1;
-      file = check_physical_pointer((void*)file);
-      f->eax = syscall_mkdir(file);
-      break;
-    case SYS_READDIR:
-      check_valid_pointer((void *)((int*)f->esp+1));
-      check_valid_pointer((void *)((int*)f->esp+2));
-      arg1 = *((int*)f->esp+1);
-      arg2 = *((int*)f->esp+2);
-      arg2 = check_physical_pointer((void*)arg2);
-      f->eax = syscall_readdir((int)arg1, (char*)arg2);
-      break;
-    case SYS_ISDIR:
-      check_valid_pointer((void *)((int*)f->esp+1));
-      arg1 = *((int*)f->esp+1);
-      f->eax = syscall_isdir((int)arg1);
-      break;
-    case SYS_INUMBER:
-      check_valid_pointer((void *)((int*)f->esp+1));
-      arg1 = *((int*)f->esp+1);
-      f->eax = syscall_inumber((int)arg1);
-      break;
     default:
-      syscall_exit(-1);
+  	  syscall_exit(-1);
   }
 }
 
@@ -213,14 +174,14 @@ syscall_handler (struct intr_frame *f UNUSED){
    addr, or invalid page */
 void 
 check_valid_pointer(void *pointer){
-  if (pointer == NULL)
-    syscall_exit(-1);
-  if (is_user_vaddr(pointer) == false)
-    syscall_exit(-1);
-  if (is_kernel_vaddr(pointer))
-    syscall_exit(-1);
-  if (!pagedir_get_page(thread_current()->pagedir, pointer))
-    syscall_exit(-1);
+	if (pointer == NULL)
+		syscall_exit(-1);
+	if (is_user_vaddr(pointer) == false)
+		syscall_exit(-1);
+	if (is_kernel_vaddr(pointer))
+		syscall_exit(-1);
+	if (!pagedir_get_page(thread_current()->pagedir, pointer))
+		syscall_exit(-1);
 }
 
 
@@ -229,17 +190,17 @@ check_valid_pointer(void *pointer){
    pointer of the page directory */
 const char*
 check_physical_pointer(void *pointer){
-  if (pointer == NULL)
-    syscall_exit(-1);
-  if (is_user_vaddr(pointer) == false)
-    syscall_exit(-1);
-  if (is_kernel_vaddr(pointer))
-    syscall_exit(-1);
-  void * ret_value = (void *)pagedir_get_page(
+	if (pointer == NULL)
+		syscall_exit(-1);
+	if (is_user_vaddr(pointer) == false)
+		syscall_exit(-1);
+	if (is_kernel_vaddr(pointer))
+		syscall_exit(-1);
+	void * ret_value = (void *)pagedir_get_page(
                      thread_current()->pagedir, pointer);
-  if (!ret_value)
-    syscall_exit(-1);
-  return (const char *)ret_value;
+	if (!ret_value)
+		syscall_exit(-1);
+	return (const char *)ret_value;
 }
 
 
@@ -265,8 +226,8 @@ syscall_halt (void){
    to exit the current thread. */
 void 
 syscall_exit(int status){
-  thread_current()->process_terminate_message = status;
-  thread_exit();
+	thread_current()->process_terminate_message = status;
+	thread_exit();
 }
 
 
@@ -323,27 +284,14 @@ int
 syscall_open (const char *file){
   lock_acquire(&syscall_critical_section);
   struct file *new_file_open = filesys_open(file);
+  lock_release(&syscall_critical_section);
   /* If failed to open the file, then return -1 as error. */
-  if (!new_file_open){
-    lock_release(&syscall_critical_section);
+  if (!new_file_open)
     return -1;
-  }
-  struct file_struct *new_item = malloc(sizeof(struct file_struct));
-  new_item->file = new_file_open;
+  struct thread* t = thread_current();
+  t->process_files[t->fd-2] = new_file_open;
   int ret_value = thread_current()->fd;
   thread_current()->fd++;
-  new_item->fd = ret_value;
-
-  struct inode *inode_open = file_get_inode(new_file_open);
-  if (!inode_open)
-    new_item->dir = NULL;
-  else if (!inode_open->data.is_dir)
-    new_item->dir = NULL;
-  else
-    new_item->dir = dir_open(inode_open);
-
-  list_push_back(&thread_current()->process_files, &new_item->elem);
-  lock_release(&syscall_critical_section);
   return ret_value;
 }
 
@@ -353,13 +301,14 @@ syscall_open (const char *file){
    call the function of file_length and return. */
 int 
 syscall_filesize (int fd){  
-  lock_acquire(&syscall_critical_section);
-  struct file *current_file = fd_to_file(fd);
-  if (!current_file){
-    /* If givn fd of current thread is empty */
-    lock_release(&syscall_critical_section);
+  /* If the given fd is too large */
+  if (fd-2 >= PROCESS_FILE_MAX)
     return -1;
-  }
+  /* If givn fd of current thread is empty */
+  if (!thread_current()->process_files[fd-2])
+    return -1;
+  lock_acquire(&syscall_critical_section);
+  struct file *current_file = thread_current()->process_files[fd-2];
   int ret_value = (int)file_length(current_file);
   lock_release(&syscall_critical_section);
   return ret_value;
@@ -378,13 +327,16 @@ syscall_read (int fd, void *buffer, unsigned size){
   /* If fd == 1, then return 0 immediately. */
   if (fd == 1)
     return 0;
+  /* If fd is invalid, i.e. negative or beyond the limit. */
+  if (fd < 0 || fd-2 >= PROCESS_FILE_MAX)
+    return 0;
+  /* If the file is null, return 0. */
+  if (!thread_current()->process_files[fd-2])
+    return 0;
+  /* If everything is ok, then call the function. */
+  /* Use a lock to deal with the synchronization. */
+  struct file *current_file = thread_current()->process_files[fd-2];
   lock_acquire(&syscall_critical_section);
-  struct file *current_file = fd_to_file(fd);
-  if (!current_file){
-    /* If givn fd of current thread is empty */
-    lock_release(&syscall_critical_section);
-    return -1;
-  }
   int ret_value = (int)file_read(current_file, buffer, size);
   lock_release(&syscall_critical_section);
   return ret_value;
@@ -394,23 +346,27 @@ syscall_read (int fd, void *buffer, unsigned size){
 /* System call to write to the file, given fd, a
    pointer to the buffer and the size. Check the 
    argument and call function in file system. */
-int
-syscall_write (int fd, const void *buffer, unsigned size){
+int syscall_write (int fd, const void *buffer, unsigned size){
   /* If it is to write to console. */
-  if (fd == 1){
-    putbuf(buffer, size);
-    return size;
-  }
+	if (fd == 1){
+		//lock_acquire(&syscall_critical_section);
+		putbuf(buffer, size);
+		//lock_release(&syscall_critical_section);
+		return size;
+	}
   /* If fd == 0, then return 0. */
-  if (fd == 0)
+	if (fd == 0)
     return 0;
+  /* If the fd is invalid, i.e. negative or beyond the limit. */
+  if (fd < 0 || fd-2 >= PROCESS_FILE_MAX)
+    return 0;
+  /* If the file is null, then return 0 as error. */
+  if (!thread_current()->process_files[fd-2])
+    return 0;
+  /* If everything is ok, then call file_write to write. */
+  /* Use a lock to deal with the synchronization. */
+  struct file *current_file = thread_current()->process_files[fd-2];
   lock_acquire(&syscall_critical_section);
-  struct file *current_file = fd_to_file(fd);
-  if (!current_file){
-    /* If givn fd of current thread is empty */
-    lock_release(&syscall_critical_section);
-    return -1;
-  }
   int ret_value = (int)file_write(current_file, buffer, size);
   lock_release(&syscall_critical_section);
   return ret_value;
@@ -420,15 +376,17 @@ syscall_write (int fd, const void *buffer, unsigned size){
 /* System call for changes the next byte to be read
    or written in open file fd to position, expressed
    in bytes from the beginning of the file. */
-void
-syscall_seek (int fd, unsigned position){
-  lock_acquire(&syscall_critical_section);
-  struct file *current_file = fd_to_file(fd);
-  if (!current_file){
-    /* If givn fd of current thread is empty */
-    lock_release(&syscall_critical_section);
+void syscall_seek (int fd, unsigned position){
+  /* If the given fd is too large or too small. */
+  if (fd-2 >= PROCESS_FILE_MAX || fd < 2)
     return;
-  }
+  /* If the current file is null, return immediately. */
+  if (!thread_current()->process_files[fd-2])
+    return;
+  /* If everything is ok, then call the function. */
+  /* Use a lock to deal with the synchronization. */
+  struct file *current_file = thread_current()->process_files[fd-2];
+  lock_acquire(&syscall_critical_section);
   file_seek(current_file, position);
   lock_release(&syscall_critical_section);
   return;
@@ -440,13 +398,16 @@ syscall_seek (int fd, unsigned position){
    in bytes from the beginning of the file. */
 unsigned 
 syscall_tell (int fd){
-  lock_acquire(&syscall_critical_section);
-  struct file *current_file = fd_to_file(fd);
-  if (!current_file){
-    /* If givn fd of current thread is empty */
-    lock_release(&syscall_critical_section);
+  /* If the given fd is invalid. */
+  if (fd-2 >= PROCESS_FILE_MAX || fd < 2)
     return;
-  }
+  /* If the current file is null. */
+  if (!thread_current()->process_files[fd-2])
+    return;
+  /* If everything is ok, then call the function. */
+  /* Use a lock to deal with the synchronization. */
+  struct file *current_file = thread_current()->process_files[fd-2];
+  lock_acquire(&syscall_critical_section);
   unsigned ret_value = (unsigned)file_tell(current_file);
   lock_release(&syscall_critical_section);
   return ret_value;
@@ -458,127 +419,17 @@ syscall_tell (int fd){
    as if by calling this function for each one. */
 void 
 syscall_close (int fd){
+  /* If the given fd is too large or too small. */
+  if (fd-2 >= PROCESS_FILE_MAX || fd < 2)
+    return;
+  /* If the current file is null. */
+  if (!thread_current()->process_files[fd-2])
+    return;
+  /* If everything is ok, then call the function. */
+  /* Use a lock to deal with the synchronization. */
+  struct file *current_file = thread_current()->process_files[fd-2]; 
   lock_acquire(&syscall_critical_section);
-  struct file *current_file = fd_to_file(fd);
-  if (!current_file){
-    /* If givn fd of current thread is empty */
-    lock_release(&syscall_critical_section);
-    return -1;
-  }
-
-  struct file_struct *pf = file_to_struct(current_file);
-  struct dir *current_dir = pf->dir;
-  if (current_dir)
-    dir_close(current_dir);
   file_close(current_file);
-  list_remove(&pf->elem);
+  thread_current()->process_files[fd-2] = NULL;
   lock_release(&syscall_critical_section);
-}
-
-
-bool
-syscall_chdir(const char *dir){
-  lock_acquire(&syscall_critical_section);
-  bool ret_value = dir_chdir(dir);
-  lock_release(&syscall_critical_section);
-  return ret_value;
-}
-
-
-bool
-syscall_mkdir(const char *dir){
-  lock_acquire(&syscall_critical_section);
-  block_sector_t sector;
-  if(!free_map_allocate(1, &sector))
-    return false;
-  bool ret_value = dir_create(sector, 1, dir);
-  lock_release(&syscall_critical_section);
-  return ret_value;
-}
-
-
-bool
-syscall_readdir(int fd, char *name){
-  lock_acquire(&syscall_critical_section);
-  struct file *current_file = fd_to_file(fd);
-  if (!current_file){
-    /* If givn fd of current thread is empty */
-    lock_release(&syscall_critical_section);
-    return false;
-  }
-  struct dir *current_dir = file_to_dir(current_file);
-  bool ret_value = dir_readdir(current_dir, name);
-  lock_release(&syscall_critical_section);
-  return ret_value;
-}
-
-
-bool
-syscall_isdir(int fd){
-  lock_acquire(&syscall_critical_section);
-  struct file *current_file = fd_to_file(fd);
-  if (!current_file){
-    /* If givn fd of current thread is empty */
-    lock_release(&syscall_critical_section);
-    return false;
-  }
-  struct inode *inode = file_get_inode(current_file);
-  bool ret_value = inode->data.is_dir;
-  lock_release(&syscall_critical_section);
-  return ret_value;
-}
-
-
-int
-syscall_inumber(int fd){
-  lock_acquire(&syscall_critical_section);
-  struct file *current_file = fd_to_file(fd);
-  if (!current_file){
-    /* If givn fd of current thread is empty */
-    lock_release(&syscall_critical_section);
-    return -1;
-  }
-  struct inode *inode = file_get_inode(current_file);
-  int ret_value = inode_get_inumber(inode);
-  lock_release(&syscall_critical_section);
-  return ret_value;
-}
-
-
-
-// proj4 helper functions
-struct file* fd_to_file(int fd){
-  struct list_elem * e;
-  for (e = list_begin(&thread_current()->process_files);
-       e != list_end(&thread_current()->process_files);
-       e = list_next(e)){
-    struct file_struct *curr = list_entry(e, struct file_struct, elem);
-    if (curr->fd == fd)
-      return curr->file;
-  }
-  return NULL;
-}
-
-struct file_struct* file_to_struct(struct file* file){
-  struct list_elem * e;
-  for (e = list_begin(&thread_current()->process_files);
-       e != list_end(&thread_current()->process_files);
-       e = list_next(e)){
-    struct file_struct *curr = list_entry(e, struct file_struct, elem);
-    if (curr->file == file)
-      return curr;
-  }
-  return NULL;
-}
-
-struct dir* file_to_dir(struct file* file){
-  struct list_elem * e;
-  for (e = list_begin(&thread_current()->process_files);
-       e != list_end(&thread_current()->process_files);
-       e = list_next(e)){
-    struct file_struct *curr = list_entry(e, struct file_struct, elem);
-    if (curr->file == file)
-      return curr->dir;
-  }
-  return NULL;
 }
