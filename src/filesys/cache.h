@@ -1,26 +1,35 @@
 #ifndef FILESYS_CACHE_H
 #define FILESYS_CACHE_H
 
+/* Include the header file we need. */
 #include "devices/block.h"
-#include "off_t.h"
-#include <stdbool.h>
+#include "threads/synch.h"
 
 
+/* Entry in the cache array. */
+struct cache_entry {
+    char data[BLOCK_SECTOR_SIZE];   /* Data buffer. */
+    struct lock entry_lock;         /* Lock for this entry. */
+    block_sector_t sector;          /* Sector number of the data. */
+    bool valid;                     /* Whether initialized. */
+    bool dirty;                     /* Modified or not. */
+    bool accessed;                  /* Been read or not. */
+};
 
-void buffer_cache_init (void);
-void buffer_cache_write (block_sector_t , const void *, int , int , bool );
-void buffer_cache_read (block_sector_t , void *, int , int );
-//size_t cache_evict (void);
-void spawn_thread_read_ahead (block_sector_t );
-void buffer_cache_write_back (void);
+
+/* Entry for read ahead. */
+struct entry_read {
+    struct list_elem elem;          /* Elem for put in list. */
+    block_sector_t sector;          /* Sector number. */
+};
 
 
+/* Function for cache operation. */
+void cache_init(void);
+void cache_write(block_sector_t sector, void *buffer,
+				int offset, int size);
+void cache_read_sector(block_sector_t sector, void *buffer,
+						int offset, int size);
+void cache_write_back(void);
 
-void cache_flush_all(void);
-void cache_read(block_sector_t sector, void *buffer);
-void cache_read_at(block_sector_t sector, void *buffer, off_t size, off_t offset);
-void cache_write(block_sector_t sector, const void *buffer);
-void cache_write_at(block_sector_t sector, const void *buffer, off_t size, off_t offset);
-void cache_read_ahead_put(block_sector_t sector);
-
-#endif
+#endif /* filesys/cache.h */

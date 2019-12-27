@@ -1,245 +1,211 @@
 #include "filesys/cache.h"
-#include <stdbool.h>
-#include <stdint.h>
-#include <string.h>
-#include <stdio.h>
-#include "devices/block.h"
 #include "devices/timer.h"
-#include "threads/malloc.h"
 #include "threads/thread.h"
-#include "threads/synch.h"
 #include "filesys.h"
 
-#define CACHE_SIZE 64
-#define CACHE_WRITE_INTV (1 * TIMER_FREQ)
+/* Define some macros. */
+#define CACHE_ENTRY_NUM 64        		/* Number of entry in cache. */
+#define WRITE_BACK_FREQ 10      		/* Frequency of write back. */
 
-static struct lock cache_lock;
-static struct list ahead_queue;
-static struct lock ahead_lock;
-static struct condition ahead_cond;
+/* Tools for synchronization. */
+static struct lock cache_lock;          /* Lock for whole cache. */
+static struct list read_ahead_queue;    /* Queue for read ahead. */
+static struct lock ahead_lock;  	    /* Lock for read ahead. */
+static struct condition ahead_cond;     /* Condition for read_ahead. */
 
-struct ahead_entry {
-    block_sector_t sector;
-    struct list_elem elem;
-};
+/* Cache body. */
+static struct cache_entry cache[CACHE_ENTRY_NUM];   /* Array of the cache. */
 
-struct cache_entry {
-    uint8_t buffer[BLOCK_SECTOR_SIZE];
-    block_sector_t sector;
-    struct lock lock;
-    bool valid;
-    bool dirty;
-    bool accessed;
-};
+/* Static function for operation. */
+struct cache_entry * cache_find_sector(block_sector_t sector);
+struct cache_entry * cache_evict(void);
+void                 cache_write_back_func(void *aux UNUSED);
+void                 cache_read_ahead(void *aux UNUSED);
+void                 thread_entry_write_back (void *);
 
-static struct cache_entry cache[CACHE_SIZE];
 
-static struct cache_entry *cache_find(block_sector_t sector);
-static struct cache_entry *cache_evict(void);
-static void cache_write_behind(void *aux UNUSED);
-static void cache_read_ahead(void *aux UNUSED);
-
-static void                       thread_entry_write_back (void *);
-
-void buffer_cache_init(void) {
-    size_t i;
-    for (i = 0; i < CACHE_SIZE; ++i) {
-        lock_init(&cache[i].lock);
+/* Initialize the buffer cache. Including the
+   lock, list and conditional variable. */
+void
+cache_init(void){
+    int i = 0;
+    /* Initialize lock for each entry. */
+    while (i < CACHE_ENTRY_NUM){
+        lock_init(&cache[i].entry_lock);
         cache[i].valid = false;
+		i++;
     }
-    lock_init(&cache_lock);
-    list_init(&ahead_queue);
-    lock_init(&ahead_lock);
+    /* Initialize other tools. */
     cond_init(&ahead_cond);
-    thread_create("write_behind", PRI_DEFAULT, cache_write_behind, NULL);
-    thread_create("read_ahead", PRI_DEFAULT, cache_read_ahead, NULL);
+    lock_init(&cache_lock);
+    lock_init(&ahead_lock);
+    list_init(&read_ahead_queue);
+    /* Create thread for write back and read ahead. */
+    thread_create("cache_write_back", PRI_DEFAULT,
+    				cache_write_back_func, NULL);
+    thread_create("cache_read_ahead", PRI_DEFAULT, 
+    					cache_read_ahead, NULL);
 }
 
-void cache_flush_all(void) {
-    size_t i;
-    for (i = 0; i < CACHE_SIZE; ++ i) {
-        struct cache_entry *ce = cache + i;
-        lock_acquire(&ce->lock);
-        if (ce->valid && ce->dirty) {
-            block_write(fs_device, ce->sector, ce->buffer);
-            ce->dirty = false;
-        }
-        lock_release(&ce->lock);
-    }
-}
 
-static struct cache_entry *cache_find(block_sector_t sector) {
-    size_t i;
-    for (i = 0; i < CACHE_SIZE; ++ i) {
-        struct cache_entry *ce = cache + i;
-        lock_acquire(&ce->lock);
-        if (ce->valid && ce->sector == sector) {
-            return ce;
-        }
-        lock_release(&ce->lock);
+/* Find the given sector in the cache. Return the pointer
+   to the entry if found. Return a NULL pointer if it does
+   not in the cache yet. */
+struct cache_entry *
+cache_find_sector(block_sector_t sector) {
+    size_t i = 0;
+    while (i < CACHE_ENTRY_NUM) {
+		struct cache_entry* entry = cache +i;
+		lock_acquire(&entry->entry_lock);
+		/* If it is not valid, continue. */
+		if (!entry->valid){
+			lock_release(&entry->entry_lock);
+			i++;
+			continue;
+		}
+		/* If found one.*/
+		if (entry->sector == sector)
+			return entry;
+		lock_release(&entry->entry_lock);
+		i++;
     }
     return NULL;
 }
+
+
+/* Write operation for the cache. If cache hit, directly
+   read the data; if miss, first bring in the sector. */
 void
-buffer_cache_write (block_sector_t sector, const void *buffer, int sector_ofs, int size, bool zeroed){
-    cache_write_at(sector, buffer, size, sector_ofs);
-}
-
-void
-buffer_cache_read (block_sector_t sector, void *buffer, int sector_ofs, int size){
-    cache_read_at(sector, buffer, size, sector_ofs);
-}
-
-
-void cache_read(block_sector_t sector, void *buffer) {
-    cache_read_at(sector, buffer, BLOCK_SECTOR_SIZE, 0);
-}
-
-void cache_read_at(block_sector_t sector, void *buffer,
-        off_t size, off_t offset) {
+cache_write(block_sector_t sector, void *buffer,
+							int offset, int size){
     lock_acquire(&cache_lock);
-    struct cache_entry *ce = cache_find(sector);
-    if (!ce) {
-        // miss!
-        ce = cache_evict();
+    /* Try to find the sector. */
+    struct cache_entry *entry = cache_find_sector(sector);
+    if (entry)
         lock_release(&cache_lock);
-        ASSERT(ce);
-        ce->sector = sector;
-        ce->dirty = false;
-        block_read(fs_device, sector, ce->buffer);
-    } else {
+    else{
+        /* If cache miss. */
+        entry = cache_evict();
+        entry->dirty = false;
+        entry->sector = sector;
+        block_read(fs_device, sector, entry->data);
         lock_release(&cache_lock);
     }
-    if (buffer) {
-        memcpy(buffer, ce->buffer + offset, (size_t) size);
-    }
-    ce->accessed = true;
-    lock_release(&ce->lock);
+    /* Write the data. */
+    memcpy(entry->data + offset, buffer, size);
+    entry->dirty = true;
+    entry->accessed = true;
+    lock_release(&entry->entry_lock);
 }
 
-static struct cache_entry *cache_evict(void) {
-    size_t hand = 0;
-    while (true) {
-        struct cache_entry *ce = cache + hand;
-        bool succ = lock_try_acquire(&ce->lock);
-        if (!succ) {
-            hand = (hand + 1) % CACHE_SIZE;
+
+/* Read operation for the cache. If cache hit, directly
+   read the data; if miss, first bring in the sector. */
+void
+cache_read_sector(block_sector_t sector, void *buffer,
+									int offset, int size){
+	lock_acquire(&cache_lock);
+	/* Try to find the sector. */
+    struct cache_entry *entry = cache_find_sector(sector);
+    if (entry)
+        lock_release(&cache_lock);
+    else{
+        /* If cache miss. */
+        entry = cache_evict();
+        entry->dirty = false;
+        entry->sector = sector;
+        block_read(fs_device, sector, entry->data);
+        lock_release(&cache_lock);
+    }
+    /* copy the data out. */
+    memcpy(buffer, entry->data + offset, (size_t) size);
+    /* Mark as accessed. */
+    entry->accessed = true;
+    lock_release(&entry->entry_lock);
+}
+
+
+/* Evict an entry in the cache. Using the clock
+   algorithm. Return the pointer to the entry. */
+struct cache_entry *
+cache_evict(void) {
+    int idx = 0;
+    struct cache_entry *entry;
+    while (1) {
+        entry = idx + cache;
+        /* If fail, move to the next one. */
+        if (!lock_try_acquire(&entry->entry_lock)) {
+            idx %= CACHE_ENTRY_NUM;
             continue;
         }
-        if (!ce->valid) {
-            ce->valid = true;
-            return ce;
+        /* If find the new entry. */
+        if (!entry->valid) {
+            entry->valid = true;
+            return entry;
         }
-        if (ce->accessed) {
-            ce->accessed = false;
-        }
-        else {
-            // evict him! lol
-            if (ce->dirty) {
-                block_write(fs_device, ce->sector, ce->buffer);
-                ce->dirty = false;
+        /* Second chance. */
+        if (entry->accessed)
+            entry->accessed = false;
+        else if (!entry->accessed){
+        	/* Move out the item. */
+            if (entry->dirty) {
+            	/* Write back the data. */
+                block_write(fs_device, entry->sector, entry->data);
             }
-            return ce;
+            entry->dirty = false;
+            return entry;
         }
-        lock_release(&ce->lock);
-        hand = (hand + 1) % CACHE_SIZE;
+        idx %= CACHE_ENTRY_NUM;
+        lock_release(&entry->entry_lock);
     }
-    NOT_REACHED();
 }
 
-void cache_write(block_sector_t sector, const void *buffer) {
-    cache_write_at(sector, buffer, BLOCK_SECTOR_SIZE, 0);
-}
 
-void cache_write_at(block_sector_t sector, const void *buffer,
-        off_t size, off_t offset) {
-    ASSERT(buffer);
-    lock_acquire(&cache_lock);
-    struct cache_entry *ce = cache_find(sector);
-    if (!ce) {
-        // miss!
-        ce = cache_evict();
-        lock_release(&cache_lock);
-        ASSERT(ce);
-        ce->sector = sector;
-        ce->dirty = false;
-        if (size != BLOCK_SECTOR_SIZE)
-            block_read(fs_device, sector, ce->buffer);
-    } else {
-        lock_release(&cache_lock);
-    }
-    memcpy(ce->buffer + offset, buffer, (size_t) size);
-    ce->accessed = true;
-    ce->dirty = true;
-    lock_release(&ce->lock);
-}
-
-static void cache_write_behind(void *aux UNUSED) {
+/* periodically writes all the dirty sectors
+   back to disk and then goes to sleep */
+void 
+cache_write_back_func(void *aux UNUSED) {
     while (true) {
-        timer_sleep(CACHE_WRITE_INTV);
-        cache_flush_all();
+        timer_sleep(WRITE_BACK_FREQ * TIMER_FREQ);
+        cache_write_back();
     }
-    NOT_REACHED();
 }
 
-static void cache_read_ahead(void *aux UNUSED) {
+/* function for writing back dirty sectors to disk. Also
+   first to make sure that it is valid. */
+void
+cache_write_back(void){
+    size_t i = 0;
+    while (i < CACHE_ENTRY_NUM) {
+        struct cache_entry *entry = cache + i;
+        lock_acquire(&entry->entry_lock);
+		/* Make sure whether valid or not. */
+        /* If not modified, unnecessary to write. */
+		if (!entry->valid || !entry->dirty){
+			lock_release(&entry->entry_lock);
+			i++;
+			continue;
+		}
+        block_write(fs_device, entry->sector, entry->data);
+        entry->dirty = false;
+        lock_release(&entry->entry_lock);
+		i++;
+    }
+}
+
+
+/* Function for read ahead. Do some operation
+   in the waiting list. */
+void 
+cache_read_ahead(void *aux UNUSED){
     while (true) {
         lock_acquire(&ahead_lock);
-        while (list_empty(&ahead_queue))
+        while (list_empty(&read_ahead_queue))
             cond_wait(&ahead_cond, &ahead_lock);
-        struct ahead_entry *ae = list_entry(list_pop_front(&ahead_queue),
-                struct ahead_entry, elem);
+        struct entry_read *ahead_entry = list_entry(
+			list_pop_front(&read_ahead_queue), struct entry_read, elem);
+        // free(ahead_entry);
+		cache_read_sector(ahead_entry->sector, NULL, BLOCK_SECTOR_SIZE, 0);
         lock_release(&ahead_lock);
-        block_sector_t sector = ae->sector;
-        free(ae);
-        cache_read(sector, NULL);
-    }
-    NOT_REACHED();
-}
-
-void cache_read_ahead_put(block_sector_t sector) {
-    lock_acquire(&ahead_lock);
-    struct ahead_entry *ae = malloc(sizeof(struct ahead_entry));
-    ae->sector = sector;
-    list_push_back(&ahead_queue, &ae->elem);
-    cond_signal(&ahead_cond, &ahead_lock);
-    lock_release(&ahead_lock);
-}
-
-/* function for writing back dirty sectors to disk */
-void
-buffer_cache_write_back (void)
-{
-  lock_acquire (&cache_lock);
-
-
-  for (int i = 0; i < 64; i++)
-    {
-      struct cache_entry *entry = &cache[i];
-      if (!entry->valid)
-        continue;
-
-      if (entry->dirty)
-        {
-          /* write back to disk */
-          block_write (fs_device, entry->sector, entry->buffer);
-
-          entry->dirty = false;
-        }
-    }
-
-  lock_release (&cache_lock);
-}
-
-/* periodically writes all the dirty sectors back to disk and goes to sleep */
-static void
-thread_entry_write_back (void *arg UNUSED)
-{
-  while (true)
-    {
-      buffer_cache_write_back ();
-
-      /* sleep */
-      timer_sleep (5 * TIMER_FREQ);
     }
 }

@@ -21,10 +21,10 @@ filesys_init (bool format)
   fs_device = block_get_role (BLOCK_FILESYS);
   if (fs_device == NULL)
     PANIC ("No file system device found, can't initialize file system.");
-
+  cache_init();
   inode_init ();
   free_map_init ();
-  buffer_cache_init();
+  
   if (format) 
     do_format ();
 
@@ -36,8 +36,8 @@ filesys_init (bool format)
 void
 filesys_done (void) 
 {
+  cache_write_back();
   free_map_close ();
-  buffer_cache_write_back ();
 }
 
 /* Creates a file named NAME with the given INITIAL_SIZE.
@@ -47,8 +47,9 @@ filesys_done (void)
 bool
 filesys_create (const char *name, off_t initial_size) 
 {
+  if (name[0] == '.')
+    return false;
   block_sector_t inode_sector = 0;
-  // struct dir *dir = dir_open_root ();
   char copy_name[strlen(name) + 1];
   memcpy(copy_name, name, strlen(name) + 1);
   
@@ -60,16 +61,11 @@ filesys_create (const char *name, off_t initial_size)
     token = strtok_r (NULL, "/", &save_ptr);
   }
 
-  if (strcmp (curr_val, ".") == 0)
-    return false;
-  if (strcmp (curr_val, "..") == 0)
-    return false;
-
-  struct dir *dir = dir_get_leaf(name);
+  struct dir *dir = find_leaf(name);
   block_sector_t parent = inode_get_inumber(dir_get_inode(dir));
   bool success = (dir != NULL
                   && free_map_allocate (1, &inode_sector)
-                  && inode_create (inode_sector, initial_size, false, parent)
+                  && inode_create (inode_sector, initial_size, parent, false)
                   && dir_add (dir, curr_val, inode_sector));
 
   if (!success && inode_sector != 0) 
@@ -87,31 +83,28 @@ filesys_create (const char *name, off_t initial_size)
 struct file *
 filesys_open (const char *name)
 {
-  if (name[strlen(name) - 1] == '/'){
-    struct dir *dir = dir_open_root ();
+  if (strcmp(name, "/") == 0){
+    struct dir *dir = dir_open_root();
     struct inode *inode = dir_get_inode(dir);
-    return file_open (inode);
+    return file_open(inode);
   }
-
-  struct dir *dir = dir_get_leaf(name);
-  struct inode *inode = NULL;
 
   char copy_name[strlen(name) + 1];
   memcpy(copy_name, name, strlen(name) + 1);
-  
   char *save_ptr;
   char *curr_val = "";
-  char *token = strtok_r (copy_name, "/", &save_ptr);
+  char *token = strtok_r(copy_name, "/", &save_ptr);
   while(token){
     curr_val = token;
-    token = strtok_r (NULL, "/", &save_ptr);
+    token = strtok_r(NULL, "/", &save_ptr);
   }
 
-  if (dir != NULL)
-    dir_lookup (dir, curr_val, &inode);
-  dir_close (dir);
-
-  return file_open (inode);
+  struct dir *dir = find_leaf(name);
+  struct inode *inode = NULL;
+  if (dir)
+    dir_lookup(dir, curr_val, &inode);
+  dir_close(dir);
+  return file_open(inode);
 }
 
 /* Deletes the file named NAME.
@@ -121,23 +114,9 @@ filesys_open (const char *name)
 bool
 filesys_remove (const char *name) 
 {
-  if(name[strlen(name) - 1] == '/')
-    return false;
-  // struct dir *dir = dir_open_root ();
-  char copy_name[strlen(name) + 1];
-  memcpy(copy_name, name, strlen(name) + 1);
-  
-  char *save_ptr;
-  char *curr_val = "";
-  char *token = strtok_r (copy_name, "/", &save_ptr);
-  while(token){
-    curr_val = token;
-    token = strtok_r (NULL, "/", &save_ptr);
-  }
-  struct dir* dir = dir_get_leaf(name);
-  bool success = dir != NULL && dir_remove (dir, curr_val);
+  struct dir* dir = find_leaf(name);
+  bool success = dir != NULL && dir_remove (dir, name);
   dir_close (dir); 
-
   return success;
 }
 
@@ -147,7 +126,7 @@ do_format (void)
 {
   printf ("Formatting file system...");
   free_map_create ();
-  if (!dir_create (ROOT_DIR_SECTOR, 16, "/"))
+  if (!inode_create (ROOT_DIR_SECTOR, 16, ROOT_DIR_SECTOR, true))
     PANIC ("root directory creation failed");
   free_map_close ();
   printf ("done.\n");

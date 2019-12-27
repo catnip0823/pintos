@@ -9,9 +9,9 @@
 
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
-#define COUNT_DIRECT_BLOCKS 122
-#define PER_SECTOR_INDIRECT_BLOCKS 128
-#define PER_SECTOR_DOUBLE_INDIRECT_BLOCKS 128*128
+#define DIRECT_BLOCK 122
+#define INDIRECT_BLOCK 128
+#define DOUBLE_INDIRECT 128*128
 
 
 struct bitmap;
@@ -20,7 +20,7 @@ struct bitmap;
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk
   {
-    block_sector_t direct_part[COUNT_DIRECT_BLOCKS];
+    block_sector_t direct_part[DIRECT_BLOCK];
     block_sector_t indirect_part;
     block_sector_t double_indirect_part;
 
@@ -28,13 +28,13 @@ struct inode_disk
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
     // uint32_t unused[125];               /* Not used. */
-    bool is_dir;
     block_sector_t parent;
+    bool dir_or_file;
   };
 
 struct inode_indirect
 {
-  block_sector_t indirect_inode[PER_SECTOR_INDIRECT_BLOCKS];
+  block_sector_t indirect_inode[INDIRECT_BLOCK];
 };
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -57,7 +57,7 @@ struct inode
   };
 
 void inode_init (void);
-bool inode_create (block_sector_t, off_t, bool is_dir, block_sector_t parent);
+bool inode_create (block_sector_t, off_t, block_sector_t parent, bool dir_or_file);
 struct inode *inode_open (block_sector_t);
 struct inode *inode_reopen (struct inode *);
 block_sector_t inode_get_inumber (const struct inode *);

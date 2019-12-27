@@ -337,12 +337,12 @@ syscall_open (const char *file){
   struct inode *inode_open = file_get_inode(new_file_open);
   if (!inode_open)
     new_item->dir = NULL;
-  else if (!inode_open->data.is_dir)
+  else if (!inode_open->data.dir_or_file)
     new_item->dir = NULL;
   else
     new_item->dir = dir_open(inode_open);
 
-  list_push_back(&thread_current()->process_files, &new_item->elem);
+  list_push_back(&thread_current()->files_per_process, &new_item->elem);
   lock_release(&syscall_critical_section);
   return ret_value;
 }
@@ -513,7 +513,22 @@ syscall_mkdir(const char *dir){
     lock_release(&syscall_critical_section);
     return false;
   }
-  bool ret_value = dir_create(sector, 1, dir);
+
+  char *copy_path = (char *)malloc(sizeof(char)*(strlen(dir)+1));
+  memcpy(copy_path, dir, strlen (dir) + 1);
+  
+  char *save_ptr;
+  char *curr_val = "";
+  char *token = strtok_r(copy_path, "/", &save_ptr);
+  while(token){
+    curr_val = token;
+    token = strtok_r(NULL, "/", &save_ptr);
+  }
+
+  struct dir *get_dir = find_leaf(dir);
+  bool ret_value = dir_create(sector, 1, get_dir);
+  if (!dir_add (get_dir, curr_val, sector))
+    ret_value = false;
   lock_release(&syscall_critical_section);
   return ret_value;
 }
@@ -545,7 +560,7 @@ syscall_isdir(int fd){
     return false;
   }
   struct inode *inode = file_get_inode(current_file);
-  bool ret_value = inode->data.is_dir;
+  bool ret_value = inode->data.dir_or_file;
   lock_release(&syscall_critical_section);
   return ret_value;
 }
@@ -571,8 +586,8 @@ syscall_inumber(int fd){
 // proj4 helper functions
 struct file* fd_to_file(int fd){
   struct list_elem * e;
-  for (e = list_begin(&thread_current()->process_files);
-       e != list_end(&thread_current()->process_files);
+  for (e = list_begin(&thread_current()->files_per_process);
+       e != list_end(&thread_current()->files_per_process);
        e = list_next(e)){
     struct file_struct *curr = list_entry(e, struct file_struct, elem);
     if (curr->fd == fd)
@@ -583,8 +598,8 @@ struct file* fd_to_file(int fd){
 
 struct file_struct* file_to_struct(struct file* file){
   struct list_elem * e;
-  for (e = list_begin(&thread_current()->process_files);
-       e != list_end(&thread_current()->process_files);
+  for (e = list_begin(&thread_current()->files_per_process);
+       e != list_end(&thread_current()->files_per_process);
        e = list_next(e)){
     struct file_struct *curr = list_entry(e, struct file_struct, elem);
     if (curr->file == file)
@@ -595,8 +610,8 @@ struct file_struct* file_to_struct(struct file* file){
 
 struct dir* file_to_dir(struct file* file){
   struct list_elem * e;
-  for (e = list_begin(&thread_current()->process_files);
-       e != list_end(&thread_current()->process_files);
+  for (e = list_begin(&thread_current()->files_per_process);
+       e != list_end(&thread_current()->files_per_process);
        e = list_next(e)){
     struct file_struct *curr = list_entry(e, struct file_struct, elem);
     if (curr->file == file)

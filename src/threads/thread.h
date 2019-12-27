@@ -149,8 +149,7 @@ struct thread
 
     // proj4
     struct dir *cwd;
-
-    struct list process_files;
+    struct list files_per_process;
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
