@@ -11,75 +11,78 @@
 /* Partition that contains the file system. */
 struct block *fs_device;
 
+/* Static function for operation. */
 static void do_format (void);
 
-/* Initializes the file system module.
-   If FORMAT is true, reformats the file system. */
+/* Initialize the file system. Also reformat
+   the system if necessary. */
 void
-filesys_init (bool format) 
-{
+filesys_init (bool format){
   fs_device = block_get_role (BLOCK_FILESYS);
+  /* If some error with filesys device. */
   if (fs_device == NULL)
     PANIC ("No file system device found, can't initialize file system.");
   cache_init();
   inode_init ();
   free_map_init ();
-  
+  /* Check whether necessary to reformat. */
   if (format) 
     do_format ();
-
+  /* Reopen the free map. */
   free_map_open ();
 }
 
-/* Shuts down the file system module, writing any unwritten data
-   to disk. */
+
+/* When everything is done, close the file system.
+   Also write back any unsaved data to disk. */
 void
 filesys_done (void) 
 {
   cache_write_back();
   free_map_close ();
 }
-
-/* Creates a file named NAME with the given INITIAL_SIZE.
-   Returns true if successful, false otherwise.
-   Fails if a file named NAME already exists,
-   or if internal memory allocation fails. */
+
+
+/* Create a new file given the name and default
+   size. Return whether it success to do so. */
 bool
 filesys_create (const char *name, off_t initial_size) 
 {
+  /* If invalid path. */
   if (name[0] == '.')
     return false;
   block_sector_t inode_sector = 0;
   char copy_name[strlen(name) + 1];
   memcpy(copy_name, name, strlen(name) + 1);
-  
+  /* parse the given name. */
   char *save_ptr;
   char *curr_val = "";
   char *token = strtok_r (copy_name, "/", &save_ptr);
+  /* Keep parsing the path. */
   while(token){
     curr_val = token;
     token = strtok_r (NULL, "/", &save_ptr);
   }
-
+  /* Find the directory of name. */
   struct dir *dir = find_leaf(name);
   block_sector_t parent = inode_get_inumber(dir_get_inode(dir));
+  /* Check whether everything success. */
   bool success = (dir != NULL
-                  && free_map_allocate (1, &inode_sector)
-                  && inode_create (inode_sector, initial_size, parent, false)
-                  && dir_add (dir, curr_val, inode_sector));
-
+               && free_map_allocate (1, &inode_sector)
+               && inode_create (inode_sector, initial_size, parent, false)
+               && dir_add (dir, curr_val, inode_sector));
+  /* If failed to do so. */
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
+  /* Close the directory. */
   dir_close (dir);
-
   return success;
 }
 
-/* Opens the file with the given NAME.
-   Returns the new file if successful or a null pointer
-   otherwise.
-   Fails if no file named NAME exists,
-   or if an internal memory allocation fails. */
+
+/* Operation for open a file with name. Return a pointer
+   to the file if it succeed, or return a null pointer if
+   failed to do so. */
 struct file *
 filesys_open (const char *name)
 {
@@ -88,39 +91,44 @@ filesys_open (const char *name)
     struct inode *inode = dir_get_inode(dir);
     return file_open(inode);
   }
-
+  /* Make a copy of the name. */
   char copy_name[strlen(name) + 1];
   memcpy(copy_name, name, strlen(name) + 1);
   char *save_ptr;
   char *curr_val = "";
   char *token = strtok_r(copy_name, "/", &save_ptr);
+  /* Parse the name. */
   while(token){
     curr_val = token;
     token = strtok_r(NULL, "/", &save_ptr);
   }
-
+  /* Find the leaf node of directory. */
   struct dir *dir = find_leaf(name);
   struct inode *inode = NULL;
+  /* Look up the inode in the dictionary. */
   if (dir)
     dir_lookup(dir, curr_val, &inode);
+  /* Close the directory. */
   dir_close(dir);
   return file_open(inode);
 }
 
-/* Deletes the file named NAME.
-   Returns true if successful, false on failure.
-   Fails if no file named NAME exists,
-   or if an internal memory allocation fails. */
+
+/* Operation for deleteing a file with given name.
+   Return whether it succeed to do so.*/
 bool
 filesys_remove (const char *name) 
 {
+  /* Find the leaf node. */
   struct dir* dir = find_leaf(name);
+  /* Try to delete the file. */
   bool success = dir != NULL && dir_remove (dir, name);
+  /* Close the directory. */
   dir_close (dir); 
   return success;
 }
-
-/* Formats the file system. */
+
+/* Format the file system. Also print the status info. */
 static void
 do_format (void)
 {

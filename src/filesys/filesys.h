@@ -1,6 +1,7 @@
 #ifndef FILESYS_FILESYS_H
 #define FILESYS_FILESYS_H
 
+/* Include the header file. */
 #include <stdbool.h>
 #include "filesys/off_t.h"
 
@@ -11,6 +12,7 @@
 /* Block device that contains the file system. */
 struct block *fs_device;
 
+/* Functions for file system operation. */
 void filesys_init (bool format);
 void filesys_done (void);
 bool filesys_create (const char *name, off_t initial_size);
