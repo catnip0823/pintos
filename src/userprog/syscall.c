@@ -42,7 +42,6 @@ int syscall_write (int fd, const void *buffer, unsigned size);
 void syscall_seek (int fd, unsigned position);
 unsigned syscall_tell (int fd);
 void syscall_close (int fd);
-
 bool syscall_chdir (const char *dir);
 bool syscall_mkdir (const char *dir);
 bool syscall_readdir (int fd, char *name);
@@ -171,6 +170,7 @@ syscall_handler (struct intr_frame *f UNUSED){
       syscall_close((int)arg1);
       break;
     case SYS_CHDIR:
+      /* Check validity of arguments. */
       check_valid_pointer((void*)((int*)f->esp + 1));
       arg1 = *((int*)f->esp+1);
       file = (char*)arg1;
@@ -178,6 +178,7 @@ syscall_handler (struct intr_frame *f UNUSED){
       f->eax = syscall_chdir(file);
       break;
     case SYS_MKDIR:
+      /* Check validity of arguments. */
       check_valid_pointer((void*)((int*)f->esp + 1));
       arg1 = *((int*)f->esp+1);
       file = (char*)arg1;
@@ -185,6 +186,7 @@ syscall_handler (struct intr_frame *f UNUSED){
       f->eax = syscall_mkdir(file);
       break;
     case SYS_READDIR:
+      /* Check validity of arguments. */
       check_valid_pointer((void *)((int*)f->esp+1));
       check_valid_pointer((void *)((int*)f->esp+2));
       arg1 = *((int*)f->esp+1);
@@ -193,11 +195,13 @@ syscall_handler (struct intr_frame *f UNUSED){
       f->eax = syscall_readdir((int)arg1, (char*)arg2);
       break;
     case SYS_ISDIR:
+      /* Check validity of arguments. */
       check_valid_pointer((void *)((int*)f->esp+1));
       arg1 = *((int*)f->esp+1);
       f->eax = syscall_isdir((int)arg1);
       break;
     case SYS_INUMBER:
+      /* Check validity of arguments. */
       check_valid_pointer((void *)((int*)f->esp+1));
       arg1 = *((int*)f->esp+1);
       f->eax = syscall_inumber((int)arg1);
@@ -328,18 +332,22 @@ syscall_open (const char *file){
     lock_release(&syscall_critical_section);
     return -1;
   }
+  /* allocate space for the new entry */
   struct file_struct *new_item = malloc(sizeof(struct file_struct));
   new_item->file = new_file_open;
   int ret_value = thread_current()->fd;
   thread_current()->fd++;
   new_item->fd = ret_value;
-
+  /* open the new inode of the new file */
   struct inode *inode_open = file_get_inode(new_file_open);
   if (!inode_open)
+    /* if cannot get inode of the new file, dir = NULL. */
     new_item->dir = NULL;
   else if (!inode_open->data.dir_or_file)
+    /* if the new file is not directory, dir = NULL. */
     new_item->dir = NULL;
   else
+    /* otherwise, the new file is directory, store directory. */
     new_item->dir = dir_open(inode_open);
 
   list_push_back(&thread_current()->files_per_process, &new_item->elem);
@@ -465,37 +473,49 @@ syscall_close (int fd){
     lock_release(&syscall_critical_section);
     return -1;
   }
-
+  /* find the file struct by the current file, for dir information. */
   struct file_struct *pf = file_to_struct(current_file);
   struct dir *current_dir = pf->dir;
   if (current_dir)
+    /* close the current directory. */
     dir_close(current_dir);
+  /* close the current file and remove it from the list. */
   file_close(current_file);
   list_remove(&pf->elem);
   lock_release(&syscall_critical_section);
 }
 
 
+/* Changes the current working directory of the process to 
+   dir, which may be relative or absolute. Returns true if 
+   successful, false on failure. */
 bool
 syscall_chdir(const char *dir){
   lock_acquire(&syscall_critical_section);
   if (dir[0] == '/'){
+    /* if the dir is root directory, change cwd to root. */
     if (!thread_current()->cwd)
       thread_current()->cwd = dir_open_root();
     lock_release(&syscall_critical_section);
     return true;
   }
-
+  /* get the current working directory of the current thread. */
   struct dir* temp_dir;
   if (!thread_current()->cwd)
     temp_dir = dir_open_root();
   else
     temp_dir = thread_current()->cwd;
+  
+  /* Searches temp_dir for a file with dir and returns true 
+     if one exists, false otherwise */
   struct inode *inode;
   if (!dir_lookup(temp_dir, dir, &inode)){
+    /* If cannot find, release lock and return. */
     lock_release(&syscall_critical_section);
     return false;
   }
+  /* If find, close the directory and set the cwd into the 
+     directory of the inode for the file. */
   dir_close(temp_dir);
   thread_current()->cwd = dir_open(inode);
   lock_release(&syscall_critical_section);
@@ -505,6 +525,12 @@ syscall_chdir(const char *dir){
 }
 
 
+/* Creates the directory named dir, which may be relative or 
+   absolute. Returns true if successful, false on failure. 
+   Fails if dir already exists or if any directory name in 
+   dir, besides the last, does not already exist. That is, 
+   mkdir("/a/b/c") succeeds only if /a/b already exists and 
+   /a/b/c does not. */
 bool
 syscall_mkdir(const char *dir){
   lock_acquire(&syscall_critical_section);
@@ -513,10 +539,10 @@ syscall_mkdir(const char *dir){
     lock_release(&syscall_critical_section);
     return false;
   }
-
-  char *copy_path = (char *)malloc(sizeof(char)*(strlen(dir)+1));
-  memcpy(copy_path, dir, strlen (dir) + 1);
-  
+  /* find the last elem of the string, e.g. for string "/a/b/c", "c" will 
+     be the curr_val. */
+  char *copy_path = (char *)malloc(sizeof(char) * (strlen(dir) + 1));
+  memcpy(copy_path, dir, strlen(dir) + 1);
   char *save_ptr;
   char *curr_val = "";
   char *token = strtok_r(copy_path, "/", &save_ptr);
@@ -524,16 +550,26 @@ syscall_mkdir(const char *dir){
     curr_val = token;
     token = strtok_r(NULL, "/", &save_ptr);
   }
-
+  /* find the last elem of the directory, e.g. for path "/a/b/c", c will 
+     be the leaf. */
   struct dir *get_dir = find_leaf(dir);
+  // block_sector_t sector;
   bool ret_value = dir_create(sector, 1, get_dir);
+  /* Adds a file named curr_val to get_dir. The file's inode is in sector
+   sector. */
   if (!dir_add (get_dir, curr_val, sector))
+    /* Return false on add failure. */
     ret_value = false;
   lock_release(&syscall_critical_section);
   return ret_value;
 }
 
 
+/* Reads a directory entry from file descriptor fd, which must 
+   represent a directory. If successful, stores the null-terminated 
+   file name in name, which must have room for READDIR_MAX_LEN + 1 
+   bytes, and returns true. If no entries are left in the directory, 
+   returns false. */
 bool
 syscall_readdir(int fd, char *name){
   lock_acquire(&syscall_critical_section);
@@ -543,13 +579,17 @@ syscall_readdir(int fd, char *name){
     lock_release(&syscall_critical_section);
     return false;
   }
+  /* If successful, stores the null-terminated file name in name. */
   struct dir *current_dir = file_to_dir(current_file);
   bool ret_value = dir_readdir(current_dir, name);
   lock_release(&syscall_critical_section);
+  /* Return true if successful, otherwise return false. */
   return ret_value;
 }
 
 
+/* Returns true if fd represents a directory, 
+false if it represents an ordinary file. */
 bool
 syscall_isdir(int fd){
   lock_acquire(&syscall_critical_section);
@@ -559,6 +599,7 @@ syscall_isdir(int fd){
     lock_release(&syscall_critical_section);
     return false;
   }
+  /* get the type(directory or ordinary) of the inode/file and return. */
   struct inode *inode = file_get_inode(current_file);
   bool ret_value = inode->data.dir_or_file;
   lock_release(&syscall_critical_section);
@@ -566,6 +607,8 @@ syscall_isdir(int fd){
 }
 
 
+/* Returns the inode number of the inode associated with fd, 
+   which may represent an ordinary file or a directory. */
 int
 syscall_inumber(int fd){
   lock_acquire(&syscall_critical_section);
@@ -575,6 +618,7 @@ syscall_inumber(int fd){
     lock_release(&syscall_critical_section);
     return -1;
   }
+  /* get the inode number of the inode/file and return. */
   struct inode *inode = file_get_inode(current_file);
   int ret_value = inode_get_inumber(inode);
   lock_release(&syscall_critical_section);
@@ -582,8 +626,8 @@ syscall_inumber(int fd){
 }
 
 
-
 // proj4 helper functions
+/* Find the file given fd from the struct file_struct. */
 struct file* fd_to_file(int fd){
   struct list_elem * e;
   for (e = list_begin(&thread_current()->files_per_process);
@@ -591,11 +635,13 @@ struct file* fd_to_file(int fd){
        e = list_next(e)){
     struct file_struct *curr = list_entry(e, struct file_struct, elem);
     if (curr->fd == fd)
+      /* if the file descripter matches what we want, return the file. */
       return curr->file;
   }
   return NULL;
 }
 
+/* Return the whole struct given fd from the struct file_struct. */
 struct file_struct* file_to_struct(struct file* file){
   struct list_elem * e;
   for (e = list_begin(&thread_current()->files_per_process);
@@ -603,11 +649,13 @@ struct file_struct* file_to_struct(struct file* file){
        e = list_next(e)){
     struct file_struct *curr = list_entry(e, struct file_struct, elem);
     if (curr->file == file)
+      /* if the file matches what we want, return the file struct. */
       return curr;
   }
   return NULL;
 }
 
+/* Find the directory given file from the struct file_struct. */
 struct dir* file_to_dir(struct file* file){
   struct list_elem * e;
   for (e = list_begin(&thread_current()->files_per_process);
@@ -615,6 +663,7 @@ struct dir* file_to_dir(struct file* file){
        e = list_next(e)){
     struct file_struct *curr = list_entry(e, struct file_struct, elem);
     if (curr->file == file)
+      /* if the file matches what we want, return the file directory. */
       return curr->dir;
   }
   return NULL;
