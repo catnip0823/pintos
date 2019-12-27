@@ -24,7 +24,6 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
-#define PROCESS_FILE_MAX 128         /* proj2 */
 
 
 /* Struct of a child process. */
@@ -132,9 +131,6 @@ struct thread
     /* The pointer to itself in terms of child. */
     struct struct_child *children;
 
-    /* The file that the procss has. */
-    struct file *process_files[PROCESS_FILE_MAX];
-
     /* fd value of the process. */
     int fd;
 
@@ -150,6 +146,11 @@ struct thread
     /* Pointer to the file itself. */
     struct file *this_file;
     /* proj3 */
+
+    // proj4
+    struct dir *cwd;
+
+    struct list process_files;
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */

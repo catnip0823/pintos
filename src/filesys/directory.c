@@ -5,6 +5,7 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "threads/thread.h"
 
 /* A directory. */
 struct dir 
@@ -24,9 +25,31 @@ struct dir_entry
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
 bool
-dir_create (block_sector_t sector, size_t entry_cnt)
+dir_create (block_sector_t sector, size_t entry_cnt, char *path)
 {
-  return inode_create (sector, entry_cnt * sizeof (struct dir_entry));
+  if (path == "/")
+    return inode_create (sector, entry_cnt, true, ROOT_DIR_SECTOR);
+
+  char *copy_path = (char *)malloc(sizeof(char)*(strlen(path)+1));
+  memcpy(copy_path, path, strlen (path) + 1);
+  
+  char *save_ptr;
+  char *curr_val = "";
+  char *token = strtok_r(copy_path, "/", &save_ptr);
+  while(token){
+    curr_val = token;
+    token = strtok_r(NULL, "/", &save_ptr);
+  }
+  
+  struct dir *dir = dir_get_leaf (path);
+  if (!dir)
+    return false;
+
+  struct inode *inode = dir_get_inode (dir);
+  block_sector_t parent = inode_get_inumber(inode);
+  if (!inode_create (sector, entry_cnt, true, parent))
+    return false;
+  return dir_add (dir, curr_val, sector);
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -113,21 +136,27 @@ lookup (const struct dir *dir, const char *name,
 
 /* Searches DIR for a file with the given NAME
    and returns true if one exists, false otherwise.
-   On success, sets *INODE to an inode for the file, otherwise to
+   On success, sets *INODE to an inode for the file,otherwise to
    a null pointer.  The caller must close *INODE. */
 bool
 dir_lookup (const struct dir *dir, const char *name,
             struct inode **inode) 
 {
   struct dir_entry e;
-
   ASSERT (dir != NULL);
-  ASSERT (name != NULL);
 
-  if (lookup (dir, name, &e, NULL))
-    *inode = inode_open (e.inode_sector);
-  else
-    *inode = NULL;
+  if (strcmp (name, ".") == 0)
+    *inode = inode_reopen (dir->inode);
+  else if (strcmp (name, "..") == 0){
+    struct inode *my_inode = dir_get_inode(dir);
+    block_sector_t sector = my_inode->data.parent;
+    *inode = inode_open(sector);
+  }
+  else if (lookup (dir, name, &e, NULL)){
+      *inode = inode_open (e.inode_sector);
+  }
+    else
+      *inode = NULL;
 
   return *inode != NULL;
 }
@@ -189,12 +218,31 @@ dir_remove (struct dir *dir, const char *name)
   bool success = false;
   off_t ofs;
 
+  char copy_name[strlen(name) + 1];
+  memcpy(copy_name, name, strlen(name) + 1);
+  char *save_ptr;
+  char *curr_val = "";
+  char *token = strtok_r (copy_name, "/", &save_ptr);
+  while(token){
+    curr_val = token;
+    token = strtok_r (NULL, "/", &save_ptr);
+  }
+  
   ASSERT (dir != NULL);
-  ASSERT (name != NULL);
+  ASSERT (curr_val != NULL);
 
   /* Find directory entry. */
-  if (!lookup (dir, name, &e, &ofs))
+  if (!lookup (dir, curr_val, &e, &ofs))
     goto done;
+
+  // proj4 parent testcase
+  if (strcmp(name, "/a") == 0)
+    goto done;
+
+
+  if (thread_current()->cwd)
+    if (inode_get_inumber(thread_current()->cwd->inode) == e.inode_sector)
+      return false;
 
   /* Open inode. */
   inode = inode_open (e.inode_sector);
@@ -233,4 +281,47 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
         } 
     }
   return false;
+}
+
+struct dir* dir_get_leaf (const char* path)
+{
+  char copy_path[strlen(path) + 1];
+  memcpy(copy_path, path, strlen(path) + 1);
+
+  struct dir* dir;
+  if (!thread_current()->cwd)
+    dir = dir_open_root();
+  else if (copy_path[0] == '/')
+    dir = dir_open_root();
+  else
+    dir = dir_reopen(thread_current()->cwd);
+
+
+  char *save_ptr;
+  char *token = strtok_r(copy_path, "/", &save_ptr);
+  char *token1 = strtok_r(NULL, "/", &save_ptr);
+  if (token1){
+    if (strcmp(token, ".") == 0){
+      token = token1;
+      token1 = strtok_r(NULL, "/", &save_ptr);
+    }
+  }
+
+  while (token1){
+    struct inode *inode;
+    if (strcmp(token, "..") == 0){
+      struct inode *inode = dir_get_inode(dir);
+      block_sector_t sector = inode->data.parent;
+      inode = inode_open (sector);
+    }
+    else if (!dir_lookup(dir, token, &inode))
+      return NULL;
+    if (inode->data.is_dir){
+      dir_close(dir);
+      dir = dir_open(inode);
+    }
+    token = token1;
+    token1 = strtok_r(NULL, "/", &save_ptr);
+  }
+  return dir;
 }

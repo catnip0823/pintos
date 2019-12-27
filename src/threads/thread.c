@@ -210,6 +210,8 @@ thread_create (const char *name, int priority,
   sema_init(&t->children->wait_child_process, 0);
   list_push_back (&thread_current()->child_list, &t->children->child_thread_elem);
 
+  thread_current()->cwd = NULL;
+
   /* Add to run queue. */
   thread_unblock (t);
 
@@ -486,8 +488,7 @@ init_thread (struct thread *t, const char *name, int priority)
   /* Initialize the child list. */
   list_init(&t->child_list);
   /* Initialize the file list. */
-  for (int i = 0; i < PROCESS_FILE_MAX; i++)
-    t->process_files[i] = NULL;
+  list_init(&t->process_files);
   t->fd = 2;
   /* Set the pointer to the parent. */
   t->parent = running_thread();
