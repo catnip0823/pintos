@@ -18,6 +18,7 @@ static struct cache_entry cache[CACHE_ENTRY_NUM];   /* Array of the cache. */
 
 /* Static function for operation. */
 struct cache_entry * cache_find_sector(block_sector_t sector);
+struct cache_entry * cache_get_sector(block_sector_t sector);
 struct cache_entry * cache_evict(void);
 void                 cache_write_back_func(void *aux UNUSED);
 void                 cache_read_ahead(void *aux UNUSED);
@@ -85,11 +86,7 @@ cache_write(block_sector_t sector, void *buffer,
         lock_release(&cache_lock);
     else{
         /* If cache miss. */
-        entry = cache_evict();
-        entry->dirty = false;
-        entry->sector = sector;
-        block_read(fs_device, sector, entry->data);
-        lock_release(&cache_lock);
+        entry = cache_get_sector(sector);
     }
     /* Write the data. */
     memcpy(entry->data + offset, buffer, size);
@@ -111,11 +108,7 @@ cache_read_sector(block_sector_t sector, void *buffer,
         lock_release(&cache_lock);
     else{
         /* If cache miss. */
-        entry = cache_evict();
-        entry->dirty = false;
-        entry->sector = sector;
-        block_read(fs_device, sector, entry->data);
-        lock_release(&cache_lock);
+        entry = cache_get_sector(sector);
     }
     /* copy the data out. */
     memcpy(buffer, entry->data + offset, (size_t) size);
@@ -128,36 +121,33 @@ cache_read_sector(block_sector_t sector, void *buffer,
 /* Evict an entry in the cache. Using the clock
    algorithm. Return the pointer to the entry. */
 struct cache_entry *
-cache_evict(void) {
-    int idx = 0;
-    struct cache_entry *entry;
-    while (1) {
-        entry = idx + cache;
-        /* If fail, move to the next one. */
-        if (!lock_try_acquire(&entry->entry_lock)) {
-            idx %= CACHE_ENTRY_NUM;
-            continue;
-        }
-        /* If find the new entry. */
-        if (!entry->valid) {
-            entry->valid = true;
-            return entry;
-        }
-        /* Second chance. */
-        if (entry->accessed)
-            entry->accessed = false;
-        else if (!entry->accessed){
-        	/* Move out the item. */
-            if (entry->dirty) {
-            	/* Write back the data. */
-                block_write(fs_device, entry->sector, entry->data);
+cache_evict(void){
+    while(1){
+        unsigned idx = 0;
+        for (idx = 0; idx < CACHE_ENTRY_NUM; idx++){
+            struct cache_entry* entry = cache + idx;
+            /* If fail, then skip to next one. */
+            if (!lock_try_acquire(&entry->entry_lock))
+                continue;
+            /* If we find a new entry. */
+            if (!entry->valid){
+                entry->valid = true;
+                return entry;
             }
+            /* Accessed, give it a second chance */
+            if (entry->accessed){
+                entry->accessed = false;
+                lock_release(&entry->entry_lock);
+                continue;
+            }
+            /* If dirty, write the data back. */
+            if(entry->dirty)
+                block_write(fs_device, entry->sector, entry->data);
             entry->dirty = false;
             return entry;
         }
-        idx %= CACHE_ENTRY_NUM;
-        lock_release(&entry->entry_lock);
     }
+    return NULL;
 }
 
 
@@ -208,4 +198,18 @@ cache_read_ahead(void *aux UNUSED){
 		cache_read_sector(ahead_entry->sector, NULL, BLOCK_SECTOR_SIZE, 0);
         lock_release(&ahead_lock);
     }
+}
+
+
+/* In terms of cache miss, bring the sector in
+   and set the parameters. May need to do eviction. */
+struct cache_entry * 
+cache_get_sector(block_sector_t sector){
+    struct cache_entry * entry = cache_evict();
+    ASSERT(entry);
+    entry->dirty = false;
+    entry->sector = sector;
+    block_read(fs_device, sector, entry->data);
+    lock_release(&cache_lock);
+    return entry;
 }
